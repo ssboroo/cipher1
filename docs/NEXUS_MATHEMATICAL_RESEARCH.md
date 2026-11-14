@@ -42,7 +42,7 @@ For each candidate (a,b), compute a residual sequence r(a,b), then apply the spe
 
 where H is the fixed header size. Ties are broken lexicographically by (a,b), making encoding deterministic.
 
-This objective is a local empirical cost function, not an entropy bound. It does not imply that the method beats general-purpose compressors.
+This objective is a local empirical cost function, not an entropy bound. It does not imply that the method beats general-purpose compressors. In wire-format version 2, the encoder emits raw bytes whenever the selected token stream is not strictly shorter than the original input. The fixed 17-byte header therefore bounds total expansion to at most 17 bytes. Version-1 transformed streams remain readable.
 
 ## 5. Claims to test
 
@@ -58,14 +58,14 @@ This objective is a local empirical cost function, not an entropy bound. It does
 1. Prove the recurrence is a bijection over R^n with fixed seeds and coefficients.
 2. Characterize residual distributions for constant, affine, periodic, Markov-like, and adversarial inputs.
 3. Determine whether the candidate search has useful expected gains after including selector and framing overhead.
-4. Analyze worst-case expansion and establish a hard output bound.
+4. The version-2 raw fallback establishes a format-level expansion bound of 17 bytes; independently verify it for every input length and malformed-stream class.
 5. Study blockwise coefficient selection, change-point detection, and streaming adaptation.
 6. Explore generalization to Z/(2^w)Z and vector-valued finite modules.
 7. Search the literature for equivalent linear prediction, finite-ring transforms, adaptive residual coding, and related patents before asserting novelty.
 
 ## 7. Cryptography boundary
 
-NARF is a public, deterministic, reversible preprocessing transform. It has no secret key and provides no confidentiality, authentication, integrity, or resistance to chosen-plaintext analysis. It must never be treated as encryption or as a cryptographic primitive.
+NARF version 2 is a public, deterministic, reversible preprocessing transform. It has no secret key and provides no confidentiality, authentication, integrity, or resistance to chosen-plaintext analysis. It must never be treated as encryption or as a cryptographic primitive.
 
 Any future cryptographic layer must begin with a separate threat model, use independently reviewed primitives during the interoperability phase, and undergo formal proof attempts and external cryptanalysis before any custom primitive is considered for deployment.
 
