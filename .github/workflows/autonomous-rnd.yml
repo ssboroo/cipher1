@@ -1,0 +1,76 @@
+name: Autonomous NEXUS R&D
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: nexus-autonomous-rnd
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    name: Hourly AI research and implementation
+    if: ${{ secrets.OPENAI_API_KEY != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure Git identity
+        run: |
+          git config user.name "cipher1-rnd-bot"
+          git config user.email "actions@users.noreply.github.com"
+      - name: Generate one bounded research patch
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-6-astra' }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python scripts/autonomous_rnd.py
+      - name: Validate and test proposed changes
+        run: |
+          cargo fmt --all
+          cargo fmt --all -- --check
+          cargo test --workspace
+          cargo clippy --workspace --all-targets -- -D warnings
+      - name: Create isolated branch and commit
+        id: commit
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BRANCH="autonomous/nexus-$(date -u +%Y%m%d-%H%M)"
+          git switch -c "$BRANCH"
+          git add crates docs README.md
+          git commit -m "Autonomous NEXUS research iteration"
+          git push origin "$BRANCH"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+      - name: Open review pull request
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create --base main --head "${{ steps.commit.outputs.branch }}" --title "Autonomous NEXUS R&D iteration" --body "Automated research proposal. CI checks passed before commit. Review mathematical correctness, prior art, security boundaries, and benchmark evidence before merging. This PR is not an endorsement of novelty or production readiness."
+  missing-secret:
+    name: Report missing API credential
+    if: ${{ secrets.OPENAI_API_KEY == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain setup requirement
+        run: |
+          echo "::warning::AI research job was not run because repository secret OPENAI_API_KEY is not configured."
+          echo "Add OPENAI_API_KEY in repository Settings > Secrets and variables > Actions."
