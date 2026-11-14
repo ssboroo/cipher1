@@ -2,13 +2,14 @@
 """Generate one constrained patch for the CIPHER-1 NEXUS research repository."""
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 
 API_URL = "https://api.openai.com/v1/responses"
-MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-astra")
+MODEL = os.environ.get("OPENAI_MODEL", "")
 MAX_CONTEXT_CHARS = 45000
 
 def run(*args):
@@ -25,10 +26,12 @@ def main():
     if not key:
         print("::warning::OPENAI_API_KEY is not configured; skipping AI patch generation.")
         return 0
+    if not MODEL:
+        print("::warning::OPENAI_MODEL is not configured; skipping AI patch generation.")
+        return 0
     paths = [
         "README.md",
         "crates/nexus-transform/src/lib.rs",
-        "crates/nexus-transform/Cargo.toml",
         "docs/NEXUS_MATHEMATICAL_RESEARCH.md",
         "docs/NEXUS_ALGORITHM_SPEC.md",
         "docs/NEXUS_VALIDATION_PLAN.md",
@@ -44,7 +47,7 @@ def main():
         "You are the cautious research engineer for CIPHER-1 NEXUS. Produce at most one small, reviewable, technically justified improvement. "
         "All repository artifacts must be English. Do not claim world-first novelty, cryptographic security, quantum resistance, production readiness, or superiority without evidence. "
         "NARF is a public reversible preprocessing transform, not encryption. Do not invent cryptographic primitives or add dependencies without strong reason. "
-        "Do not modify CI workflow files, scripts/autonomous_rnd.py, Cargo.lock, or files outside crates/, docs/, and README.md. "
+        "Only propose edits to existing Rust source files under crates/*/src/ or Markdown files under docs/, plus README.md. Never add, delete, rename, or change file modes. Do not modify Cargo manifests, lockfiles, CI, scripts, or build scripts. "
         "Prefer a correctness fix, meaningful test, precise mathematical clarification, or reproducible benchmark improvement. "
         "Return ONLY a unified diff with diff --git headers, or exactly NO_CHANGE. Never fabricate test results."
     )
@@ -76,8 +79,32 @@ def main():
     if "diff --git " not in patch:
         print("Model output was not a unified diff; refusing to apply it.", file=sys.stderr)
         return 4
-    if any(x in patch for x in ("../", "/etc/", ".github/workflows/", "scripts/autonomous_rnd.py")):
-        print("Patch contains a forbidden path; refusing to apply it.", file=sys.stderr)
+    file_headers = re.findall(r"^diff --git a/(.*?) b/(.*?)$", patch, re.MULTILINE)
+    if not file_headers:
+        print("Patch has no parseable file headers; refusing to apply it.", file=sys.stderr)
+        return 5
+    for old_path, new_path in file_headers:
+        parts = old_path.split("/")
+        allowed = (
+            old_path == "README.md"
+            or (old_path.startswith("docs/") and old_path.endswith(".md"))
+            or (len(parts) >= 4 and parts[0] == "crates" and parts[2] == "src"
+                and old_path.endswith(".rs"))
+        )
+        if old_path != new_path or not allowed or any(part in ("", ".", "..") for part in parts):
+            print("Patch path is outside the strict source/documentation allowlist.", file=sys.stderr)
+            return 5
+        try:
+            subprocess.check_call(
+                ["git", "cat-file", "-e", "HEAD:" + old_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            print("Patch may only modify existing files.", file=sys.stderr)
+            return 5
+    if "new file mode" in patch or "deleted file mode" in patch or "rename from " in patch:
+        print("Patch may not add, delete, or rename files.", file=sys.stderr)
         return 5
     with open("/tmp/nexus-agent.patch", "w", encoding="utf-8") as handle:
         handle.write(patch + "\n")
