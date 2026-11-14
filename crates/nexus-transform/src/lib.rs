@@ -54,7 +54,7 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
             let packed = pack_residuals_v3(input, alpha, beta);
             let total = HEADER_LEN + packed.len();
 
-            let replace = best.as_ref().map_or(true, |(best_size, best_a, best_b, _)| {
+            let replace = best.as_ref().is_none_or(|(best_size, best_a, best_b, _)| {
                 total < *best_size
                     || (total == *best_size && (alpha, beta) < (*best_a, *best_b))
             });
@@ -334,7 +334,7 @@ fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformErr
             i = i
                 .checked_add(consumed)
                 .ok_or(TransformError::InvalidRunStream)?;
-            if out.len().checked_add(count).map_or(true, |n| n > expected) {
+            if out.len().checked_add(count).is_none_or(|n| n > expected) {
                 return Err(TransformError::InvalidRunStream);
             }
             let value = *input.get(i).ok_or(TransformError::InvalidRunStream)?;
