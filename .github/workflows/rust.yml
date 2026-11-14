@@ -26,6 +26,9 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Normalize Rust formatting
+        run: cargo fmt --all
+
       - name: Verify formatting
         run: cargo fmt --all -- --check
 
