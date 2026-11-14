@@ -23,8 +23,8 @@ def read_file(path):
 def main():
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
-        print("OPENAI_API_KEY is required", file=sys.stderr)
-        return 2
+        print("::warning::OPENAI_API_KEY is not configured; skipping AI patch generation.")
+        return 0
     paths = [
         "README.md",
         "crates/nexus-transform/src/lib.rs",
