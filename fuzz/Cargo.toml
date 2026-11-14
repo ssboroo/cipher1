@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 nexus-transform = { path = "../crates/nexus-transform" }
+cipher1-core = { path = "../crates/cipher1-core" }
 
 [[bin]]
 name = "decode_arbitrary"
@@ -20,3 +21,10 @@ bench = false
 
 [workspace]
 members = ["."]
+
+[[bin]]
+name = "aead_open"
+path = "fuzz_targets/aead_open.rs"
+test = false
+doc = false
+bench = false
