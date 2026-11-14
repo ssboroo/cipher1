@@ -15,6 +15,13 @@ MAX_CONTEXT_CHARS = 80000
 def run(*args):
     return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT)
 
+def set_output(name, value):
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if output_path:
+        with open(output_path, "a", encoding="utf-8") as handle:
+            handle.write(f"{name}={value}\\n")
+
+
 def read_file(path):
     try:
         return run("git", "show", "HEAD:" + path)
@@ -80,6 +87,7 @@ def main():
     patch = "\n".join(output).strip()
     if not patch or patch == "NO_CHANGE":
         print("No justified patch proposed.")
+        set_output("changed", "false")
         return 0
     if patch.startswith("```"):
         lines = patch.splitlines()
@@ -121,6 +129,7 @@ def main():
     subprocess.check_call(["git", "apply", "--check", "/tmp/nexus-agent.patch"])
     subprocess.check_call(["git", "apply", "/tmp/nexus-agent.patch"])
     print("Applied one candidate patch. CI must validate it before commit.")
+    set_output("changed", "true")
     return 0
 
 if __name__ == "__main__":
