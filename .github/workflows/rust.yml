@@ -48,7 +48,7 @@ jobs:
           rustup toolchain install 1.75.0 --profile minimal
           cargo +1.75.0 check --workspace --lib
 
-      - name: Check WebAssembly target
+      - name: Check cross-platform targets
         if: runner.os == 'Linux'
         run: |
           rustup target add wasm32-unknown-unknown aarch64-linux-android aarch64-apple-ios aarch64-pc-windows-msvc
@@ -62,7 +62,7 @@ jobs:
 
       - name: Run NARF baseline benchmark
         if: runner.os == 'Linux'
-        run: cargo bench -p nexus-transform --bench narf_baseline > target/narf-baseline.csv
+        run: cargo bench -p nexus-transform --bench narf_baseline | tee target/narf-baseline.csv
 
       - name: Archive benchmark CSV
         if: runner.os == 'Linux'
