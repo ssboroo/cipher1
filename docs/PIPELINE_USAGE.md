@@ -69,8 +69,12 @@ fn example() -> Result<(), Box<dyn std::error::Error>> {
 
 - C1AE authenticates its header and caller-supplied context. The context is
   public and must be supplied unchanged when decrypting.
-- The C1AE decoder limits the decrypted compressed frame; the NARF decoder
-  separately limits decompressed output. Both limits are required.
+- The C1AE decoder limits the decrypted compressed frame and returns it in a
+  zeroizing buffer; the NARF decoder separately limits decompressed output.
+  Both limits are required.
+- The example returns the final plaintext as a normal Vec. Applications
+  handling secrets should wrap that result in zeroize::Zeroizing or otherwise
+  clear it when no longer needed.
 - This pipeline does not provide sender identity, replay prevention, key
   exchange, key rotation, or post-quantum protection.
 - Do not combine secrets and attacker-controlled input in the same compressed
