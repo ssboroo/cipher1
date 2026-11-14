@@ -38,6 +38,7 @@ def main():
         "docs/NEXUS_ALGORITHM_SPEC.md",
         "docs/NEXUS_VALIDATION_PLAN.md",
         "docs/NARF_BASELINE_BENCHMARK.md",
+        "docs/NARF_BASELINE_RESULTS.md",
         "docs/ARCHITECTURE.md",
         "docs/THREAT_MODEL.md",
         "docs/C1AE_USAGE.md",
