@@ -24,6 +24,16 @@ x_i = r_i + a*x_(i-1) + b*x_(i-2) (mod 256).
 
 Because the coefficient of x_i is one, reconstruction is uniquely defined for every a,b in R. The transform is therefore bijective when the two seeds and coefficient pair are retained.
 
+## 3.1 Matrix formulation and invertibility proof
+
+For fixed coefficients a and b, define the linear map T from R^n to R^n by retaining the first two coordinates and replacing each later coordinate with its residual. Relative to the standard basis, T is represented by a lower-triangular n-by-n matrix. Its first two rows are identity rows. For every i >= 2, row i has diagonal entry 1, entry -a in column i-1, entry -b in column i-2, and zero entries elsewhere.
+
+Therefore every diagonal entry is 1 and det(T) = 1 in R = Z/256Z. The element 1 is a unit in this ring, so T is invertible. Equivalently, the inverse can be constructed sequentially because each x_i appears with coefficient 1 and depends only on already reconstructed coordinates.
+
+This establishes bijectivity for each fixed coefficient pair and each finite input length. It does not establish compression efficiency, computational novelty, cryptographic security, or optimality of the coefficient search.
+
+For n < 2, the transform is the identity on the available coordinates; the same conclusion holds.
+
 ## 4. Adaptive objective
 
 For each candidate (a,b), compute a residual sequence r(a,b), then apply the specified run/literal coder P. Select:
