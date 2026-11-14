@@ -1,0 +1,67 @@
+# NEXUS Validation and Experimental Plan
+
+## Phase 0 — Correctness and safety
+
+- Unit-test all candidate coefficients and input lengths from 0 through 512.
+- Property-test random byte arrays with fixed and generated seeds.
+- Fuzz the decoder with arbitrary byte streams.
+- Test length overflow, truncated headers, invalid versions, truncated literals, truncated runs, excessive output declarations, and trailing data.
+- Run Miri where supported and sanitizing/fuzzing tools on native targets.
+- Require deterministic output across x86_64, AArch64, and WebAssembly.
+
+Exit criteria: exact round-trip for all generated inputs; no panic, unbounded allocation, or undefined behavior on malformed input.
+
+## Phase 1 — Baselines
+
+Compare against:
+- Identity (no compression)
+- Simple RLE
+- LZ4
+- Zstandard
+- Brotli
+
+Use public corpora and legally distributable samples: Canterbury, Silesia, Calgary, enwik8 where licensing permits, synthetic periodic data, repeated records, JSON, CSV, source code, images, audio, and encrypted/random data.
+
+Report total bytes including every header and metadata field.
+
+## Phase 2 — Performance
+
+Measure:
+- compression ratio;
+- encode and decode throughput;
+- p50/p95/p99 latency;
+- peak resident memory;
+- CPU cycles per input byte;
+- energy per GiB where hardware measurement is available.
+
+Run at least 30 repetitions after warm-up, publish raw measurements, and avoid comparing unlike hardware or compiler settings.
+
+## Phase 3 — Mathematical characterization
+
+Evaluate residual histograms, empirical entropy, autocorrelation, conditional entropy, and coefficient-selection stability across data classes. Use held-out datasets to prevent tuning only to the benchmark corpus.
+
+## Phase 4 — Platform matrix
+
+Targets:
+- Linux x86_64 and AArch64
+- Windows x86_64 and ARM64
+- macOS Intel and Apple Silicon
+- Android ARM64
+- iOS ARM64
+- WebAssembly/WASI
+
+Require byte-for-byte conformance vectors on every target.
+
+## Phase 5 — Security research
+
+NARF is not cryptography. Test parser robustness and side-channel behavior as engineering concerns, but do not describe these as cryptographic security. Evaluate future encryption separately against established AEAD and post-quantum standards.
+
+## Phase 6 — Release gates
+
+No production release until:
+- a stable format version is frozen;
+- independent implementations pass conformance tests;
+- fuzzing and security review are published;
+- benchmark claims are independently reproducible;
+- all known limitations are documented;
+- a license, governance process, and vulnerability disclosure policy exist.
