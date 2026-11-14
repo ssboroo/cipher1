@@ -9,6 +9,7 @@ use chacha20poly1305::{
     KeyInit, XChaCha20Poly1305, XNonce,
 };
 use thiserror::Error;
+use zeroize::Zeroizing;
 
 const MAGIC: &[u8; 4] = b"C1AE";
 const VERSION: u8 = 1;
@@ -56,9 +57,9 @@ impl Default for AeadDecodeLimits {
 /// Generate a 256-bit key using the operating system cryptographic RNG.
 ///
 /// Store the returned key in a secure key manager; never commit or log it.
-pub fn generate_key() -> Result<[u8; KEY_LEN], AeadFrameError> {
-    let mut key = [0u8; KEY_LEN];
-    getrandom::getrandom(&mut key).map_err(|_| AeadFrameError::RandomnessUnavailable)?;
+pub fn generate_key() -> Result<Zeroizing<[u8; KEY_LEN]>, AeadFrameError> {
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    getrandom::getrandom(&mut *key).map_err(|_| AeadFrameError::RandomnessUnavailable)?;
     Ok(key)
 }
 
@@ -171,7 +172,7 @@ mod tests {
 
     #[test]
     fn key_generation_uses_fresh_random_material() {
-        assert_ne!(generate_key().unwrap(), generate_key().unwrap());
+        assert_ne!(*generate_key().unwrap(), *generate_key().unwrap());
     }
 
     #[test]
