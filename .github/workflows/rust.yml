@@ -35,3 +35,7 @@ jobs:
       - name: Run Clippy
         if: runner.os == 'Linux'
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run NARF baseline benchmark
+        if: runner.os == 'Linux'
+        run: cargo bench -p nexus-transform --bench narf_baseline
