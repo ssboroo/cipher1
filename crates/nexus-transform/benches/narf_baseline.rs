@@ -7,7 +7,9 @@ const ITERATIONS: usize = 5;
 
 fn datasets() -> Vec<(&'static str, Vec<u8>)> {
     let repeated = vec![0x41; INPUT_LEN];
-    let periodic = (0..INPUT_LEN).map(|i| [0x10, 0x20, 0x30, 0x40][i % 4]).collect();
+    let periodic = (0..INPUT_LEN)
+        .map(|i| [0x10, 0x20, 0x30, 0x40][i % 4])
+        .collect();
     let ramp = (0..INPUT_LEN).map(|i| (i & 0xff) as u8).collect();
     let text_like = (0..INPUT_LEN)
         .map(|i| {
@@ -61,15 +63,15 @@ fn main() {
         for _ in 0..ITERATIONS {
             black_box(encode(black_box(&input)));
         }
-        let encode_ns = encode_start.elapsed().as_nanos() as f64
-            / (ITERATIONS * input.len()) as f64;
+        let encode_ns =
+            encode_start.elapsed().as_nanos() as f64 / (ITERATIONS * input.len()) as f64;
 
         let decode_start = Instant::now();
         for _ in 0..ITERATIONS {
             black_box(decode(black_box(&encoded)).expect("NARF decode"));
         }
-        let decode_ns = decode_start.elapsed().as_nanos() as f64
-            / (ITERATIONS * input.len()) as f64;
+        let decode_ns =
+            decode_start.elapsed().as_nanos() as f64 / (ITERATIONS * input.len()) as f64;
 
         let ratio = encoded.len() as f64 / input.len().max(1) as f64;
         println!(
