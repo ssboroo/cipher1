@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: nexus-autonomous-rnd
@@ -64,3 +65,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr create --base main --head "${{ steps.commit.outputs.branch }}" --title "Autonomous NEXUS R&D iteration" --body "Automated research proposal. CI checks passed before commit. Review mathematical correctness, prior art, security boundaries, and benchmark evidence before merging. This PR is not an endorsement of novelty or production readiness."
+      - name: Dispatch cross-platform CI for the proposal
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run rust.yml --ref "${{ steps.commit.outputs.branch }}"
+          sleep 5
+          RUN_ID="$(gh run list --workflow rust.yml --branch "${{ steps.commit.outputs.branch }}" --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "Could not identify the dispatched cross-platform CI run."
+            exit 1
+          fi
+          gh run watch "$RUN_ID" --exit-status
