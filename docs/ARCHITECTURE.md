@@ -44,7 +44,7 @@ All integer fields use big-endian byte order.
 | 16 | 32 | Integrity digest | BLAKE3 |
 | 48 | N | Payload | Opaque bytes |
 
-The current header size is 48 bytes.
+The current C1NX version-1 header size is 48 bytes.
 
 ## Integrity construction
 
@@ -60,6 +60,22 @@ The digest covers the domain separator, version, flags, payload length, and payl
 
 This unkeyed digest can detect corruption, but it does not authenticate the sender. An attacker who can replace a frame can recompute the digest.
 
+## C1AE version-1 authenticated envelope
+
+The optional authenticated-encryption module uses XChaCha20-Poly1305. Its wire layout is:
+
+| Offset | Size | Field | Value |
+|---:|---:|---|---|
+| 0 | 4 | Magic | C1AE |
+| 4 | 1 | Version | 0x01 |
+| 5 | 24 | Nonce | Fresh OS-CSPRNG output |
+| 29 | 8 | Plaintext length | Unsigned 64-bit, big-endian |
+| 37 | N + 16 | Ciphertext and tag | XChaCha20-Poly1305 output |
+
+The authenticated associated data is the complete 37-byte header concatenated with caller-supplied associated data. The key is a caller-managed 32-byte value. The decoder checks the declared plaintext limit and exact frame length before decrypting. Key IDs, KDFs, key rotation, sender identity, and replay protection are not part of this format.
+
+This is an integration of an established AEAD primitive, not a new CIPHER-1 cipher. The wrapper has not been independently audited.
+
 ## Compatibility rules
 
 - Reject unknown versions and flags.
@@ -74,6 +90,6 @@ This unkeyed digest can detect corruption, but it does not authenticate the send
 - integrity: digest and authentication interfaces
 - compression: optional compression adapters
 - fec: error detection and forward-error-correction adapters
-- crypto: adapters for established AEAD algorithms
+- crypto: adapters for established AEAD algorithms (C1AE currently uses XChaCha20-Poly1305)
 - stream: bounded streaming encoder and decoder
 - vectors: public interoperability test vectors
