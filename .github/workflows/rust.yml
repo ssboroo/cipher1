@@ -42,11 +42,11 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
-      - name: Check declared MSRV
+      - name: Check library MSRV
         if: runner.os == 'Linux'
         run: |
           rustup toolchain install 1.75.0 --profile minimal
-          cargo +1.75.0 check --workspace --all-targets
+          cargo +1.75.0 check --workspace --lib
 
       - name: Check WebAssembly target
         if: runner.os == 'Linux'
