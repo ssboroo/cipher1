@@ -47,7 +47,7 @@ Version 3 uses an extended grammar:
 
 ## 5. Selection
 
-Evaluate all 64 coefficient pairs. For the transformed representation, cost equals 17 plus the complete token stream length. Select minimum cost; break ties by ascending alpha then ascending beta. Do not select using residual size alone. Versions 2 and 3 compare the selected token stream length with the original input length. If the token stream is not strictly shorter, encode raw mode instead. Thus encoded size is at most original_length + 17 bytes (subject to representable input length), rather than suffering unbounded token expansion.
+Evaluate all 64 coefficient pairs. For the transformed representation, cost equals 17 plus the complete token stream length. Select minimum cost; break ties by ascending alpha then ascending beta. Do not select using residual size alone. The current implementation computes the exact token-stream length without allocating candidate token buffers, then encodes only the winning coefficient pair; this is an implementation optimization and does not alter the wire format. Versions 2 and 3 compare the selected token stream length with the original input length. If the token stream is not strictly shorter, encode raw mode instead. Thus encoded size is at most original_length + 17 bytes (subject to representable input length), rather than suffering unbounded token expansion.
 
 ## 6. Decoder requirements
 
