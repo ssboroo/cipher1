@@ -1,0 +1,11 @@
+[package]
+name = "cipher1-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Experimental CIPHER-1 binary framing and integrity prototype"
+
+[dependencies]
+blake3 = "1.5"
+thiserror = "1.0"
