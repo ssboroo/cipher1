@@ -10,7 +10,7 @@ import urllib.request
 
 API_URL = "https://api.openai.com/v1/responses"
 MODEL = os.environ.get("OPENAI_MODEL", "")
-MAX_CONTEXT_CHARS = 65000
+MAX_CONTEXT_CHARS = 80000
 
 def run(*args):
     return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT)
@@ -43,6 +43,8 @@ def main():
         "docs/C1AE_USAGE.md",
         "docs/PIPELINE_USAGE.md",
         "docs/NEXUS_FUZZING.md",
+        "docs/SUPPLY_CHAIN_SECURITY.md",
+        "docs/RESEARCH_STATUS.md",
     ]
     sections = []
     for path in paths:
@@ -53,7 +55,7 @@ def main():
     instructions = (
         "You are the cautious research engineer for CIPHER-1 NEXUS. Produce at most one small, reviewable, technically justified improvement. "
         "All repository artifacts must be English. Do not claim world-first novelty, cryptographic security, quantum resistance, production readiness, or superiority without evidence. "
-        "NARF is a public reversible preprocessing transform, not encryption. C1AE is an integration of the standard XChaCha20-Poly1305 AEAD, not a custom cipher. Preserve its nonce, associated-data, output-limit, and zeroization invariants. Never invent or alter cryptographic primitives; do not add dependencies without strong reason. "
+        "NARF is a public reversible preprocessing transform, not encryption. C1AE is an integration of the standard XChaCha20-Poly1305 AEAD, not a custom cipher. Preserve its nonce, associated-data, output-limit, and zeroization invariants. Keep BLAKE3 at 1.8.7 or newer to avoid the compromised arrayref dependency; do not weaken the supply-chain gate or lower the MSRV. Never invent or alter cryptographic primitives; do not add dependencies without strong reason. "
         "Only propose edits to existing Rust source files under crates/*/src/ or Markdown files under docs/, plus README.md. Never add, delete, rename, or change file modes. Do not modify Cargo manifests, lockfiles, CI, scripts, or build scripts. "
         "Prefer a correctness fix, meaningful test, precise mathematical clarification, or reproducible benchmark improvement. "
         "Return ONLY a unified diff with diff --git headers, or exactly NO_CHANGE. Never fabricate test results."
