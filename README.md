@@ -26,6 +26,7 @@ CIPHER-1 NEXUS is an experimental research project exploring a new, modular data
 - [NARF v3 algorithm specification](docs/NEXUS_ALGORITHM_SPEC.md)
 - [Decoder fuzzing plan](docs/NEXUS_FUZZING.md)
 - [Rust dependency supply-chain controls](docs/SUPPLY_CHAIN_SECURITY.md)
+- [Current research status and evidence gates](docs/RESEARCH_STATUS.md)
 
 ## Important security notice
 
