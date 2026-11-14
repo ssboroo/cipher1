@@ -6,10 +6,12 @@
 - Property-test random byte arrays with fixed and generated seeds.
 - Fuzz the decoder with arbitrary byte streams.
 - Test length overflow, truncated headers, invalid versions, truncated literals, truncated runs, excessive output declarations, and trailing data.
+- Verify version-2 raw fallback for incompressible inputs and assert encoded_size <= input_size + 17 for all generated inputs.
+- Verify version-1 decode compatibility and reject non-canonical raw-mode markers, seeds, and payload lengths.
 - Run Miri where supported and sanitizing/fuzzing tools on native targets.
 - Require deterministic output across x86_64, AArch64, and WebAssembly.
 
-Exit criteria: exact round-trip for all generated inputs; no panic, unbounded allocation, or undefined behavior on malformed input.
+Exit criteria: exact round-trip for all generated inputs; no panic, unbounded allocation, or undefined behavior on malformed input; version-2 encoded-size bound holds; legacy version-1 fixtures decode exactly.
 
 ## Phase 1 — Baselines
 
