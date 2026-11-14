@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn raw_mode_rejects_length_mismatch_and_noncanonical_seeds() {
-        let input: Vec<u8> = (0..256)
+        let input: Vec<u8> = (0_u16..256)
             .map(|i| (i.wrapping_mul(73).wrapping_add(i.wrapping_mul(i).wrapping_mul(19))) as u8)
             .collect();
         let mut encoded = Vec::with_capacity(HEADER_LEN + input.len());
