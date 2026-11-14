@@ -1,0 +1,10 @@
+[package]
+name = "nexus-transform"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Experimental reversible adaptive residual transform for CIPHER-1 NEXUS"
+
+[dependencies]
+thiserror = "1.0"
