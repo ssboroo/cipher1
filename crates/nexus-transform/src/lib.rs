@@ -342,7 +342,7 @@ fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformErr
             out.resize(out.len() + count, value);
         } else if control & 0x80 != 0 {
             let count = (control as usize & 0x7f) + 1;
-            if count < 3 || out.len().checked_add(count).map_or(true, |n| n > expected) {
+            if count < 3 || out.len().checked_add(count).is_none_or(|n| n > expected) {
                 return Err(TransformError::InvalidRunStream);
             }
             let value = *input.get(i).ok_or(TransformError::InvalidRunStream)?;
@@ -350,7 +350,7 @@ fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformErr
             out.resize(out.len() + count, value);
         } else {
             let count = (control as usize & 0x7f) + 1;
-            if out.len().checked_add(count).map_or(true, |n| n > expected) {
+            if out.len().checked_add(count).is_none_or(|n| n > expected) {
                 return Err(TransformError::InvalidRunStream);
             }
             let end = i.checked_add(count).ok_or(TransformError::InvalidRunStream)?;
@@ -381,7 +381,7 @@ fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError>
         let control = input[i];
         i += 1;
         let count = (control as usize & 0x7f) + 1;
-        if out.len().checked_add(count).map_or(true, |n| n > expected) {
+        if out.len().checked_add(count).is_none_or(|n| n > expected) {
             return Err(TransformError::InvalidRunStream);
         }
         if control & 0x80 != 0 {
