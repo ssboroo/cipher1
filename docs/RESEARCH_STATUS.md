@@ -70,10 +70,12 @@ cryptographic algorithm.
 
 ## Next engineering priorities
 
-1. Review actual NARF v3 benchmark CSV; do not infer superiority from synthetic
-   data alone.
-2. Prototype block-adaptive coefficient selection only if measured workloads
-   justify its metadata and CPU cost.
+1. The exact token-size estimator is implemented and validated; the first
+   post-optimization CI run showed a directional 26–29% encode-time reduction
+   on four synthetic fixtures. Repeat the experiment on multiple runs and
+   representative public corpora before accepting the improvement.
+2. Prototype block-adaptive coefficient selection only if representative
+   workloads justify its metadata and CPU cost.
 3. Add stable cross-language conformance vectors for C1NX, C1AE, and NARF.
 4. Keep C1AE based on reviewed primitives; focus research on protocol,
    interoperability, key lifecycle, and safe composition.
