@@ -67,7 +67,7 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
 
     let (_, selected_alpha, selected_beta, packed) =
         best.expect("candidate set is non-empty");
-    // Version 2 uses an explicit raw mode whenever token coding would not
+    // Versions 2 and 3 use an explicit raw mode whenever token coding would not
     // reduce the payload. This bounds expansion to the fixed 17-byte header.
     let use_raw = packed.len() >= input.len();
     let (alpha, beta, seed0, seed1, body): (u8, u8, u8, u8, &[u8]) = if use_raw {
