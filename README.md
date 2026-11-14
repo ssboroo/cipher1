@@ -12,7 +12,7 @@ CIPHER-1 NEXUS is an experimental research project exploring a new, modular data
 
 ## Current experimental components
 
-- `crates/cipher1-core`: versioned binary framing and unkeyed BLAKE3 integrity check.
+- `crates/cipher1-core`: versioned binary framing, unkeyed BLAKE3 integrity check, and an optional C1AE authenticated envelope using standard XChaCha20-Poly1305.
 - `crates/nexus-transform`: NEXUS Adaptive Residual Transform (NARF) prototype. It tests 64 second-order modular recurrence candidates and applies a run/literal coder. Version 3 uses extended LEB128 run tokens and a raw fallback; the decoder retains version-1 and version-2 read compatibility.
 - `docs/NEXUS_MATHEMATICAL_RESEARCH.md`: mathematical hypothesis, algebraic definition, and falsification criteria.
 - `docs/NEXUS_ALGORITHM_SPEC.md`: experimental wire format and decoder requirements.
@@ -21,7 +21,7 @@ CIPHER-1 NEXUS is an experimental research project exploring a new, modular data
 
 ## Important security notice
 
-NARF is not encryption and has no secret key. The existing frame digest is unkeyed and does not authenticate a sender. Neither component protects sensitive production data. Do not use this repository as a security product.
+NARF is not encryption. The legacy C1NX digest is unkeyed and does not authenticate a sender. The optional C1AE module uses standard XChaCha20-Poly1305, but this wrapper has not been independently audited and does not provide key management, sender identity, or replay protection. Do not treat this research repository as a production security product.
 
 ## Build and test
 
