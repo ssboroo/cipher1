@@ -50,7 +50,8 @@ jobs:
 
       - name: Check dependency supply chain
         run: |
-          if cargo tree --workspace --all-targets --prefix none | grep -E '^(arrayref v0\\.3\\.10|internment v0\\.8\\.7|append-only-vec v0\\.1\\.9|proc-macro1 |proc-macro-en |aovine |arone |aronenao |tinymember )'; then
+          cargo tree --workspace --all-targets --prefix none > /tmp/cipher1-dependency-tree.txt
+          if grep -E '^(arrayref v0\\.3\\.10|internment v0\\.8\\.7|append-only-vec v0\\.1\\.9|proc-macro1 |proc-macro-en |aovine |arone |aronenao |tinymember )' /tmp/cipher1-dependency-tree.txt; then
             echo "A known-compromised Rust crate version is present in the dependency graph." >&2
             exit 1
           fi
