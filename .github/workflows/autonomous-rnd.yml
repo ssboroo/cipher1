@@ -40,6 +40,7 @@ jobs:
           git config user.name "cipher1-rnd-bot"
           git config user.email "actions@users.noreply.github.com"
       - name: Generate one bounded research patch
+        id: patch
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
@@ -47,12 +48,14 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
         run: python scripts/autonomous_rnd.py
       - name: Validate and test proposed changes
+        if: steps.patch.outputs.changed == 'true'
         run: |
           cargo fmt --all
           cargo fmt --all -- --check
           cargo test --workspace
           cargo clippy --workspace --all-targets -- -D warnings
       - name: Create isolated branch and commit
+        if: steps.patch.outputs.changed == 'true'
         id: commit
         env:
           GH_TOKEN: ${{ github.token }}
