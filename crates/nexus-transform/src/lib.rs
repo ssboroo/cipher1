@@ -51,8 +51,7 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
 
     for &alpha in &CANDIDATES {
         for &beta in &CANDIDATES {
-            let residuals = forward_residual(input, alpha, beta);
-            let packed = pack_runs_v3(&residuals);
+            let packed = pack_residuals_v3(input, alpha, beta);
             let total = HEADER_LEN + packed.len();
 
             let replace = best.as_ref().map_or(true, |(best_size, best_a, best_b, _)| {
@@ -175,6 +174,7 @@ pub fn decode_with_limits(
     Ok(output)
 }
 
+#[cfg(test)]
 fn forward_residual(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
     let mut residuals = Vec::with_capacity(input.len().saturating_sub(2));
     for i in 2..input.len() {
@@ -187,6 +187,7 @@ fn forward_residual(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
 
 /// Token format: 0..127 means 1..128 literal bytes; 128..255 means
 /// 1..128 repetitions of the following byte.
+#[cfg(test)]
 fn pack_runs(input: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     let mut i = 0;
@@ -217,48 +218,67 @@ fn pack_runs(input: &[u8]) -> Vec<u8> {
 }
 
 
-/// Version-3 token coding extends repeat runs with an unsigned LEB128 length.
-/// Control 0xff is reserved for an extended repeat; other high-bit controls
-/// encode repeats of 1..127 bytes. Literal controls remain 1..128 bytes.
-fn pack_runs_v3(input: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < input.len() {
-        let run = run_length_full(input, i);
+/// Encode residuals directly from the source bytes. This avoids allocating a
+/// full residual buffer for each of the 64 candidate coefficient pairs.
+fn pack_residuals_v3(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
+    let residual_count = input.len().saturating_sub(2);
+    let mut out = Vec::with_capacity(residual_count);
+    let mut i = 0usize;
+
+    while i < residual_count {
+        let value = residual_at(input, alpha, beta, i);
+        let mut run = 1usize;
+        while i + run < residual_count
+            && residual_at(input, alpha, beta, i + run) == value
+        {
+            run += 1;
+        }
+
         if run >= 128 {
             out.push(0xff);
             write_uleb128(run, &mut out);
-            out.push(input[i]);
+            out.push(value);
             i += run;
         } else if run >= 3 {
             out.push(0x80 | ((run - 1) as u8));
-            out.push(input[i]);
+            out.push(value);
             i += run;
         } else {
             let start = i;
-            i += run;
-            while i < input.len() && i - start < 128 {
-                let next_run = run_length_full(input, i);
+            let mut literals = [0u8; 128];
+            while i < residual_count && i - start < literals.len() {
+                let next_value = residual_at(input, alpha, beta, i);
+                let mut next_run = 1usize;
+                while next_run < 3
+                    && i + next_run < residual_count
+                    && residual_at(input, alpha, beta, i + next_run) == next_value
+                {
+                    next_run += 1;
+                }
                 if next_run >= 3 {
                     break;
                 }
-                let take = next_run.min(128 - (i - start));
+                let take = next_run.min(literals.len() - (i - start));
+                for offset in 0..take {
+                    literals[i - start + offset] =
+                        residual_at(input, alpha, beta, i + offset);
+                }
                 i += take;
             }
             let count = i - start;
             out.push((count - 1) as u8);
-            out.extend_from_slice(&input[start..i]);
+            out.extend_from_slice(&literals[..count]);
         }
     }
     out
 }
 
-fn run_length_full(input: &[u8], start: usize) -> usize {
-    let mut end = start + 1;
-    while end < input.len() && input[end] == input[start] {
-        end += 1;
-    }
-    end - start
+fn residual_at(input: &[u8], alpha: u8, beta: u8, residual_index: usize) -> u8 {
+    let i = residual_index + 2;
+    let prediction = (alpha as u16 * input[i - 1] as u16
+        + beta as u16 * input[i - 2] as u16)
+        & 0xff;
+    (input[i] as u16).wrapping_sub(prediction) as u8
 }
 
 fn write_uleb128(mut value: usize, out: &mut Vec<u8>) {
@@ -345,6 +365,7 @@ fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformErr
     Ok(out)
 }
 
+#[cfg(test)]
 fn run_length(input: &[u8], start: usize) -> usize {
     let mut end = start + 1;
     while end < input.len() && input[end] == input[start] && end - start < 128 {
