@@ -9,6 +9,12 @@ fuzz_target!(|data: &[u8]| {
         max_plaintext_len: 1024 * 1024,
     };
 
+    let sealed = seal(&key, data, b"nexus-fuzz-context")
+        .expect("bounded fuzz input should be sealable");
+    let round_trip = open(&sealed, &key, b"nexus-fuzz-context", limits)
+        .expect("freshly sealed fuzz input must authenticate");
+    assert_eq!(round_trip, data);
+
     if let Ok(plaintext) = open(data, &key, b"nexus-fuzz-context", limits) {
         let frame = seal(&key, &plaintext, b"nexus-fuzz-context")
             .expect("bounded accepted plaintext should be sealable");
