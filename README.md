@@ -24,6 +24,7 @@ CIPHER-1 NEXUS is an experimental research project exploring a new, modular data
 - [C1AE authenticated-encryption usage](docs/C1AE_USAGE.md)
 - [Protected compression and encryption pipeline](docs/PIPELINE_USAGE.md)
 - [NARF v3 algorithm specification](docs/NEXUS_ALGORITHM_SPEC.md)
+- [NARF preliminary benchmark results](docs/NARF_BASELINE_RESULTS.md)
 - [Decoder fuzzing plan](docs/NEXUS_FUZZING.md)
 - [Rust dependency supply-chain controls](docs/SUPPLY_CHAIN_SECURITY.md)
 - [Current research status and evidence gates](docs/RESEARCH_STATUS.md)
