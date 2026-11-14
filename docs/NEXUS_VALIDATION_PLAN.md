@@ -9,6 +9,7 @@
 - Verify version-2/3 raw fallback for incompressible inputs and assert encoded_size <= input_size + 17 for all generated inputs.
 - Verify version-3 extended runs, canonical ULEB128 parsing, overflow rejection, and version-1/version-2 compatibility.
 - Verify version-1 decode compatibility and reject non-canonical raw-mode markers, seeds, and payload lengths.
+- Verify the exact token-size estimator equals the emitted token-stream length for all 64 coefficient pairs and extended-run boundary lengths.
 - Run Miri where supported and sanitizing/fuzzing tools on native targets.
 - Require deterministic output across x86_64, AArch64, and WebAssembly.
 
