@@ -9,6 +9,10 @@ on:
     - cron: "37 3 * * *"
   workflow_dispatch:
 
+concurrency:
+  group: nexus-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
