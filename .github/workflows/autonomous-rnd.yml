@@ -16,7 +16,6 @@ concurrency:
 jobs:
   agent:
     name: Hourly AI research and implementation
-    if: ${{ secrets.OPENAI_API_KEY != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -65,12 +64,3 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr create --base main --head "${{ steps.commit.outputs.branch }}" --title "Autonomous NEXUS R&D iteration" --body "Automated research proposal. CI checks passed before commit. Review mathematical correctness, prior art, security boundaries, and benchmark evidence before merging. This PR is not an endorsement of novelty or production readiness."
-  missing-secret:
-    name: Report missing API credential
-    if: ${{ secrets.OPENAI_API_KEY == '' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Explain setup requirement
-        run: |
-          echo "::warning::AI research job was not run because repository secret OPENAI_API_KEY is not configured."
-          echo "Add OPENAI_API_KEY in repository Settings > Secrets and variables > Actions."
