@@ -30,7 +30,9 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz arbitrary decoder input
-        run: cargo fuzz run decode_arbitrary -- -max_total_time=180 -max_len=1048576
+        run: |
+          cargo fuzz run decode_arbitrary -- -max_total_time=180 -max_len=1048576
+          cargo fuzz run aead_open -- -max_total_time=180 -max_len=1048576
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@v4
