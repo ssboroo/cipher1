@@ -14,4 +14,4 @@ getrandom = { version = "=0.2.15", features = ["js"] }
 zeroize = "=1.8.1"
 
 [target.'cfg(any(target_arch = "wasm32", target_os = "android", target_os = "ios", all(target_os = "windows", target_arch = "aarch64")))'.dependencies]
-blake3 = { version = "=1.8.2", features = ["pure"] }
+blake3 = { version = "=1.8.7", features = ["pure"] }
