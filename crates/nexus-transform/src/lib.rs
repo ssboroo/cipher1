@@ -7,7 +7,9 @@
 use thiserror::Error;
 
 const MAGIC: &[u8; 4] = b"NXAR";
-const VERSION: u8 = 1;
+const VERSION: u8 = 2;
+const LEGACY_VERSION: u8 = 1;
+const RAW_MODE: u8 = 0xff;
 const HEADER_LEN: usize = 4 + 1 + 1 + 1 + 8 + 2;
 const CANDIDATES: [u8; 8] = [0, 1, 2, 3, 5, 8, 13, 21];
 
@@ -63,17 +65,33 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
         }
     }
 
-    let (_, alpha, beta, packed) = best.expect("candidate set is non-empty");
+    let (_, selected_alpha, selected_beta, packed) =
+        best.expect("candidate set is non-empty");
+    // Version 2 uses an explicit raw mode whenever token coding would not
+    // reduce the payload. This bounds expansion to the fixed 17-byte header.
+    let use_raw = packed.len() >= input.len();
+    let (alpha, beta, seed0, seed1, body): (u8, u8, u8, u8, &[u8]) = if use_raw {
+        (RAW_MODE, RAW_MODE, 0, 0, input)
+    } else {
+        (
+            selected_alpha,
+            selected_beta,
+            input.first().copied().unwrap_or(0),
+            input.get(1).copied().unwrap_or(0),
+            &packed,
+        )
+    };
+
     let len = u64::try_from(input.len()).expect("slice length fits in u64 on supported targets");
-    let mut output = Vec::with_capacity(HEADER_LEN + packed.len());
+    let mut output = Vec::with_capacity(HEADER_LEN + body.len());
     output.extend_from_slice(MAGIC);
     output.push(VERSION);
     output.push(alpha);
     output.push(beta);
     output.extend_from_slice(&len.to_be_bytes());
-    output.push(input.first().copied().unwrap_or(0));
-    output.push(input.get(1).copied().unwrap_or(0));
-    output.extend_from_slice(&packed);
+    output.push(seed0);
+    output.push(seed1);
+    output.extend_from_slice(body);
     output
 }
 
@@ -92,15 +110,13 @@ pub fn decode_with_limits(
     if &input[..4] != MAGIC {
         return Err(TransformError::InvalidMagic);
     }
-    if input[4] != VERSION {
-        return Err(TransformError::UnsupportedVersion(input[4]));
+    let version = input[4];
+    if version != VERSION && version != LEGACY_VERSION {
+        return Err(TransformError::UnsupportedVersion(version));
     }
 
     let alpha = input[5];
     let beta = input[6];
-    if !CANDIDATES.contains(&alpha) || !CANDIDATES.contains(&beta) {
-        return Err(TransformError::InvalidParameters);
-    }
     let mut len_bytes = [0_u8; 8];
     len_bytes.copy_from_slice(&input[7..15]);
     let declared = u64::from_be_bytes(len_bytes);
@@ -111,6 +127,22 @@ pub fn decode_with_limits(
 
     let seed0 = input[15];
     let seed1 = input[16];
+    if alpha == RAW_MODE && beta == RAW_MODE {
+        if version != VERSION || seed0 != 0 || seed1 != 0 {
+            return Err(TransformError::InvalidParameters);
+        }
+        let raw = &input[HEADER_LEN..];
+        if raw.len() != output_len {
+            return Err(TransformError::InvalidLength);
+        }
+        return Ok(raw.to_vec());
+    }
+    if alpha == RAW_MODE || beta == RAW_MODE
+        || !CANDIDATES.contains(&alpha)
+        || !CANDIDATES.contains(&beta)
+    {
+        return Err(TransformError::InvalidParameters);
+    }
     if (output_len == 0 && (seed0 != 0 || seed1 != 0))
         || (output_len == 1 && seed1 != 0)
     {
@@ -261,6 +293,8 @@ mod tests {
     #[test]
     fn rejects_corrupt_run_stream() {
         let mut encoded = encode(b"");
+        encoded[5] = 0;
+        encoded[6] = 0;
         encoded.push(0x80);
         encoded.push(0);
         assert_eq!(decode(&encoded), Err(TransformError::InvalidRunStream));
@@ -330,6 +364,56 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn incompressible_input_uses_raw_mode_without_token_expansion() {
+        let mut state = 0x243f_6a88_u32;
+        for len in 0..=4096 {
+            let input: Vec<u8> = (0..len)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    state as u8
+                })
+                .collect();
+            let encoded = encode(&input);
+            assert!(encoded.len() <= HEADER_LEN + input.len(), "length={len}");
+            assert_eq!(decode(&encoded).unwrap(), input);
+            if encoded[5] == RAW_MODE {
+                assert_eq!(&encoded[5..7], &[RAW_MODE, RAW_MODE]);
+                assert_eq!(&encoded[15..17], &[0, 0]);
+                assert_eq!(&encoded[HEADER_LEN..], input.as_slice());
+            }
+        }
+    }
+
+    #[test]
+    fn decoder_accepts_legacy_version_one_streams() {
+        let input = vec![0x5a; 512];
+        let mut legacy = encode(&input);
+        assert_ne!(legacy[5], RAW_MODE);
+        legacy[4] = LEGACY_VERSION;
+        assert_eq!(decode(&legacy).unwrap(), input);
+    }
+
+    #[test]
+    fn raw_mode_rejects_length_mismatch_and_noncanonical_seeds() {
+        let mut encoded = encode(&[0x91, 0x27, 0x44, 0x18]);
+        assert_eq!(&encoded[5..7], &[RAW_MODE, RAW_MODE]);
+
+        encoded.push(0);
+        assert_eq!(decode(&encoded), Err(TransformError::InvalidLength));
+
+        let mut bad_seed = encode(&[0x91, 0x27, 0x44, 0x18]);
+        bad_seed[15] = 1;
+        assert_eq!(decode(&bad_seed), Err(TransformError::InvalidParameters));
+
+        let mut partial_marker = encode(&[0x91, 0x27, 0x44, 0x18]);
+        partial_marker[6] = 0;
+        assert_eq!(decode(&partial_marker), Err(TransformError::InvalidParameters));
+    }
+
     #[test]
     fn rejects_non_candidate_coefficients() {
         let mut encoded = encode(b"parameter validation");
@@ -359,6 +443,8 @@ mod tests {
     #[test]
     fn rejects_trailing_encoded_tokens() {
         let mut encoded = encode(b"");
+        encoded[5] = 0;
+        encoded[6] = 0;
         encoded.push(0);
         encoded.push(0);
         assert_eq!(decode(&encoded), Err(TransformError::InvalidRunStream));
