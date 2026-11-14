@@ -562,16 +562,17 @@ mod tests {
         frame.extend_from_slice(&[0, 0]);
         frame.extend_from_slice(&129_u64.to_be_bytes());
         frame.extend_from_slice(&[0, 0]);
-        frame.extend_from_slice(&[0xff, 0x81, 0x00, 0x41]);
+        frame.extend_from_slice(&[0xff, 0x81, 0x01, 0x41]);
         assert_eq!(decode(&frame), Err(TransformError::InvalidRunStream));
 
         let mut short_extended = frame.clone();
         short_extended[7..15].copy_from_slice(&127_u64.to_be_bytes());
-        short_extended[19] = 0x7f;
+        short_extended[18] = 0x7f;
+        short_extended[19] = 0x41;
         assert_eq!(decode(&short_extended), Err(TransformError::InvalidRunStream));
 
         let mut overlong = frame;
-        overlong[18] = 0x80;
+        overlong[18] = 0x81;
         overlong[19] = 0x00;
         assert_eq!(decode(&overlong), Err(TransformError::InvalidRunStream));
     }
