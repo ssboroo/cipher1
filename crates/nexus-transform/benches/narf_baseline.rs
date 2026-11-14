@@ -67,7 +67,9 @@ fn brotli_compress(input: &[u8]) -> Vec<u8> {
 fn brotli_decompress(input: &[u8]) -> Vec<u8> {
     let mut decoder = Decompressor::new(Cursor::new(input), 4096);
     let mut output = Vec::new();
-    decoder.read_to_end(&mut output).expect("Brotli decompression");
+    decoder
+        .read_to_end(&mut output)
+        .expect("Brotli decompression");
     output
 }
 
