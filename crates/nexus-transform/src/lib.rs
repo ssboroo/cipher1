@@ -301,6 +301,36 @@ mod tests {
     }
 
     #[test]
+    fn every_candidate_pair_is_reversible_on_deterministic_inputs() {
+        let mut state = 0x6a09_e667_u32;
+        for &alpha in &CANDIDATES {
+            for &beta in &CANDIDATES {
+                for len in 0..=512 {
+                    let input: Vec<u8> = (0..len)
+                        .map(|_| {
+                            state ^= state << 13;
+                            state ^= state >> 17;
+                            state ^= state << 5;
+                            state as u8
+                        })
+                        .collect();
+                    let residuals = forward_residual(&input, alpha, beta);
+                    let mut reconstructed = input.iter().take(2).copied().collect::<Vec<_>>();
+                    for residual in residuals {
+                        let n = reconstructed.len();
+                        let value = (residual as u16
+                            + alpha as u16 * reconstructed[n - 1] as u16
+                            + beta as u16 * reconstructed[n - 2] as u16)
+                            & 0xff;
+                        reconstructed.push(value as u8);
+                    }
+                    assert_eq!(reconstructed, input, "alpha={alpha}, beta={beta}, len={len}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn rejects_non_candidate_coefficients() {
         let mut encoded = encode(b"parameter validation");
         encoded[5] = 4;
