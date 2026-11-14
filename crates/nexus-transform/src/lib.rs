@@ -546,7 +546,7 @@ mod tests {
 
     #[test]
     fn version_three_encodes_long_runs_compactly() {
-        for input in [vec![0x41; 16_384], (0..16_384).map(|i| (i % 4) as u8).collect()] {
+        for input in [vec![0x41; 16_384], (0..16_384).map(|i| (i % 2) as u8).collect()] {
             let encoded = encode(&input);
             assert_eq!(encoded[4], VERSION);
             assert_eq!(decode(&encoded).unwrap(), input);
