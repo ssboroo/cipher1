@@ -602,9 +602,20 @@ mod tests {
         bad_seed[15] = 1;
         assert_eq!(decode(&bad_seed), Err(TransformError::InvalidParameters));
 
-        let mut partial_marker = encoded;
+        let mut partial_marker = encoded.clone();
         partial_marker[6] = 0;
         assert_eq!(decode(&partial_marker), Err(TransformError::InvalidParameters));
+
+        let mut legacy_raw = encoded;
+        legacy_raw[4] = LEGACY_VERSION_2;
+        assert_eq!(decode(&legacy_raw).unwrap(), input);
+
+        let mut forbidden_v1_raw = legacy_raw;
+        forbidden_v1_raw[4] = LEGACY_VERSION;
+        assert_eq!(
+            decode(&forbidden_v1_raw),
+            Err(TransformError::InvalidParameters)
+        );
     }
 
     #[test]
