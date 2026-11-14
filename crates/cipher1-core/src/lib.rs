@@ -1,9 +1,9 @@
-pub mod aead;
-
-//! CIPHER-1 version 1 frame codec.
+//! CIPHER-1 version 1 binary frame codec.
 //!
-//! This module provides framing and integrity verification only.
-//! It does not encrypt data or provide sender authentication.
+//! This module provides framing and an unkeyed integrity digest. The optional
+//! authenticated-encryption envelope is exposed separately through the aead module.
+
+pub mod aead;
 
 use thiserror::Error;
 
