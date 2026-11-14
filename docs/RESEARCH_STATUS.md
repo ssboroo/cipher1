@@ -51,8 +51,9 @@ cryptographic algorithm.
 - NARF benchmark compares identity, LZ4, Zstandard, and Brotli on five
   deterministic synthetic workloads. Raw CSV is archived by CI.
 - Daily fuzz workflow exercises NARF and C1AE decoders with bounded outputs.
-- Hourly autonomous R&D workflow proposes one bounded patch on an isolated
-  branch and is designed to open a review pull request. Automated changes are
+- Hourly autonomous R&D workflow also runs after source/documentation changes
+  on main; it proposes one bounded patch on an isolated branch and is designed
+  to open a review pull request. Automated changes are
   not merged without review.
 
 ## Evidence still required
