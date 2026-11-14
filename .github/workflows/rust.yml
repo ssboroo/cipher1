@@ -45,8 +45,15 @@ jobs:
       - name: Check library MSRV
         if: runner.os == 'Linux'
         run: |
-          rustup toolchain install 1.75.0 --profile minimal
-          cargo +1.75.0 check --workspace --lib
+          rustup toolchain install 1.85.0 --profile minimal
+          cargo +1.85.0 check --workspace --lib
+
+      - name: Check dependency supply chain
+        run: |
+          if cargo tree --workspace --all-targets --prefix none | grep -E '^(arrayref v0\\.3\\.10|internment v0\\.8\\.7|append-only-vec v0\\.1\\.9|proc-macro1 |proc-macro-en |aovine |arone |aronenao |tinymember )'; then
+            echo "A known-compromised Rust crate version is present in the dependency graph." >&2
+            exit 1
+          fi
 
       - name: Check cross-platform targets
         if: runner.os == 'Linux'
