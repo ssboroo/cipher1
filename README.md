@@ -19,13 +19,20 @@ CIPHER-1 NEXUS is an experimental research project exploring a new, modular data
 - `docs/NEXUS_VALIDATION_PLAN.md`: correctness, performance, platform, and security validation plan.
 - `docs/THREAT_MODEL.md`: current security boundaries.
 
+## Documentation
+
+- [C1AE authenticated-encryption usage](docs/C1AE_USAGE.md)
+- [Protected compression and encryption pipeline](docs/PIPELINE_USAGE.md)
+- [NARF v3 algorithm specification](docs/NEXUS_ALGORITHM_SPEC.md)
+- [Decoder fuzzing plan](docs/NEXUS_FUZZING.md)
+
 ## Important security notice
 
 NARF is not encryption. The legacy C1NX digest is unkeyed and does not authenticate a sender. The optional C1AE module uses standard XChaCha20-Poly1305, but this wrapper has not been independently audited and does not provide key management, sender identity, or replay protection. Do not treat this research repository as a production security product.
 
 ## Build and test
 
-Requirements: Rust stable toolchain.
+Requirements: Rust 1.85 or newer.
 
 ```bash
 cargo test --workspace
