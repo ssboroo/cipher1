@@ -7,8 +7,9 @@ The hourly workflow requires a model API credential. GitHub Actions cannot call 
 1. Create an API key in the OpenAI Platform.
 2. Open this repository's Settings, then Secrets and variables, then Actions.
 3. Add a repository secret named `OPENAI_API_KEY`.
-4. Optionally add a repository variable named `OPENAI_MODEL` to override the default model identifier. The selected model must be available to the API project.
-5. Open Actions, select Autonomous NEXUS R&D, and run the workflow manually once.
+4. Add a repository variable named `OPENAI_MODEL` with an exact model identifier enabled for your API project. There is intentionally no assumed default model identifier.
+5. In Settings → Actions → General, enable **Allow GitHub Actions to create and approve pull requests** if you want automatic PR creation.
+6. Open Actions, select Autonomous NEXUS R&D, and run the workflow manually once.
 
 Never put an API key in source code, workflow YAML, issues, or commit messages. API usage is billed separately from a ChatGPT subscription.
 
@@ -16,9 +17,10 @@ Never put an API key in source code, workflow YAML, issues, or commit messages. 
 
 - Scheduled hourly at minute 17 UTC; GitHub may delay scheduled starts.
 - Uses the OpenAI Responses API to propose one small patch per run.
-- Only allows edits under `crates/`, `docs/`, and `README.md`.
+- Only allows modifications to existing Rust source files under `crates/*/src/`, Markdown files under `docs/`, and `README.md`. It rejects new/deleted/renamed files, manifests, lockfiles, build scripts, and workflow changes.
+- Tests run without the OpenAI API key or GitHub write token in their environment; checkout credentials are not persisted.
 - Runs formatting, workspace tests, and Clippy before committing.
-- Pushes a dedicated `autonomous/nexus-*` branch and opens a pull request.
+- Pushes a dedicated `autonomous/nexus-*` branch and attempts to open a pull request. The repository setting **Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests** must be enabled for automatic PR creation. If disabled, the branch and cross-platform CI still run, but the PR step reports a warning.
 - Never pushes model-generated code directly to `main` and never auto-merges.
 - If no justified patch is proposed, it exits without a commit.
 - If `OPENAI_API_KEY` is absent, the AI job is skipped and a warning is emitted.
