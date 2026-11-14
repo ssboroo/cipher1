@@ -17,7 +17,7 @@ Never put an API key in source code, workflow YAML, issues, or commit messages. 
 
 - Scheduled hourly at minute 17 UTC; GitHub may delay scheduled starts.
 - Uses the OpenAI Responses API to propose one small patch per run.
-- Only allows modifications to existing Rust source files under `crates/*/src/`, Markdown files under `docs/`, and `README.md`. It rejects new/deleted/renamed files, manifests, lockfiles, build scripts, and workflow changes.
+- The model may modify only existing Rust source files under `crates/*/src/`, Markdown files under `docs/`, and `README.md`. The commit step may additionally stage rustfmt-only changes to existing `crates/*/benches/*.rs` files. It rejects new/deleted/renamed files, manifests, lockfiles, build scripts, and workflow changes.
 - Tests run without the OpenAI API key or GitHub write token in their environment; checkout credentials are not persisted.
 - Runs formatting, workspace tests, and Clippy before committing.
 - Pushes a dedicated `autonomous/nexus-*` branch and attempts to open a pull request. The repository setting **Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests** must be enabled for automatic PR creation. If disabled, the branch and cross-platform CI still run, but the PR step reports a warning.
