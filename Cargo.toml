@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/cipher1-core"]
+members = ["crates/cipher1-core", "crates/nexus-transform"]
 resolver = "2"
 
 [workspace.package]
