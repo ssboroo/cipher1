@@ -32,6 +32,8 @@ pub enum AeadFrameError {
     LengthMismatch,
     #[error("frame authentication failed")]
     AuthenticationFailed,
+    #[error("payload could not be encrypted with the selected AEAD limits")]
+    EncryptionFailed,
     #[error("operating-system random number generation failed")]
     RandomnessUnavailable,
     #[error("payload length cannot be represented on this platform")]
@@ -80,7 +82,10 @@ pub fn seal(
     header.extend_from_slice(&nonce);
     header.extend_from_slice(&plaintext_len.to_be_bytes());
 
-    let mut authenticated_data = Vec::with_capacity(HEADER_LEN + associated_data.len());
+    let aad_capacity = HEADER_LEN
+        .checked_add(associated_data.len())
+        .ok_or(AeadFrameError::LengthNotRepresentable)?;
+    let mut authenticated_data = Vec::with_capacity(aad_capacity);
     authenticated_data.extend_from_slice(&header);
     authenticated_data.extend_from_slice(associated_data);
 
@@ -94,9 +99,12 @@ pub fn seal(
                 aad: &authenticated_data,
             },
         )
-        .map_err(|_| AeadFrameError::AuthenticationFailed)?;
+        .map_err(|_| AeadFrameError::EncryptionFailed)?;
 
-    let mut output = Vec::with_capacity(HEADER_LEN + ciphertext.len());
+    let output_capacity = HEADER_LEN
+        .checked_add(ciphertext.len())
+        .ok_or(AeadFrameError::LengthNotRepresentable)?;
+    let mut output = Vec::with_capacity(output_capacity);
     output.extend_from_slice(&header);
     output.extend_from_slice(&ciphertext);
     Ok(output)
@@ -137,7 +145,10 @@ pub fn open(
         return Err(AeadFrameError::LengthMismatch);
     }
 
-    let mut authenticated_data = Vec::with_capacity(HEADER_LEN + associated_data.len());
+    let aad_capacity = HEADER_LEN
+        .checked_add(associated_data.len())
+        .ok_or(AeadFrameError::LengthNotRepresentable)?;
+    let mut authenticated_data = Vec::with_capacity(aad_capacity);
     authenticated_data.extend_from_slice(&input[..HEADER_LEN]);
     authenticated_data.extend_from_slice(associated_data);
 
