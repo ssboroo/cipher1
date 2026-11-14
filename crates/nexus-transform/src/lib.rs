@@ -414,14 +414,18 @@ mod tests {
         encoded.extend_from_slice(&input);
         assert_eq!(decode(&encoded).unwrap(), input);
 
-        encoded.push(0);
-        assert_eq!(decode(&encoded), Err(TransformError::InvalidLength));
+        let mut trailing_payload = encoded.clone();
+        trailing_payload.push(0);
+        assert_eq!(
+            decode(&trailing_payload),
+            Err(TransformError::InvalidLength)
+        );
 
-        let mut bad_seed = encode(&input);
+        let mut bad_seed = encoded.clone();
         bad_seed[15] = 1;
         assert_eq!(decode(&bad_seed), Err(TransformError::InvalidParameters));
 
-        let mut partial_marker = encode(&input);
+        let mut partial_marker = encoded;
         partial_marker[6] = 0;
         assert_eq!(decode(&partial_marker), Err(TransformError::InvalidParameters));
     }
