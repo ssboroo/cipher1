@@ -44,4 +44,12 @@ jobs:
 
       - name: Run NARF baseline benchmark
         if: runner.os == 'Linux'
-        run: cargo bench -p nexus-transform --bench narf_baseline
+        run: cargo bench -p nexus-transform --bench narf_baseline > target/narf-baseline.csv
+
+      - name: Archive benchmark CSV
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: narf-baseline-${{ github.sha }}
+          path: target/narf-baseline.csv
+          if-no-files-found: error
