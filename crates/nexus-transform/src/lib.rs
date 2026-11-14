@@ -36,7 +36,9 @@ pub struct DecodeLimits {
 
 impl Default for DecodeLimits {
     fn default() -> Self {
-        Self { max_output_len: 64 * 1024 * 1024 }
+        Self {
+            max_output_len: 64 * 1024 * 1024,
+        }
     }
 }
 
@@ -52,10 +54,12 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
             let packed = pack_runs(&residuals);
             let total = HEADER_LEN + packed.len();
 
-            let replace = best.as_ref().map_or(true, |(best_size, best_a, best_b, _)| {
-                total < *best_size
-                    || (total == *best_size && (alpha, beta) < (*best_a, *best_b))
-            });
+            let replace = best
+                .as_ref()
+                .map_or(true, |(best_size, best_a, best_b, _)| {
+                    total < *best_size
+                        || (total == *best_size && (alpha, beta) < (*best_a, *best_b))
+                });
 
             if replace {
                 best = Some((total, alpha, beta, packed));
@@ -82,10 +86,7 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, TransformError> {
     decode_with_limits(input, DecodeLimits::default())
 }
 
-pub fn decode_with_limits(
-    input: &[u8],
-    limits: DecodeLimits,
-) -> Result<Vec<u8>, TransformError> {
+pub fn decode_with_limits(input: &[u8], limits: DecodeLimits) -> Result<Vec<u8>, TransformError> {
     if input.len() < HEADER_LEN {
         return Err(TransformError::Truncated);
     }
@@ -111,9 +112,7 @@ pub fn decode_with_limits(
 
     let seed0 = input[15];
     let seed1 = input[16];
-    if (output_len == 0 && (seed0 != 0 || seed1 != 0))
-        || (output_len == 1 && seed1 != 0)
-    {
+    if (output_len == 0 && (seed0 != 0 || seed1 != 0)) || (output_len == 1 && seed1 != 0) {
         return Err(TransformError::InvalidParameters);
     }
     let residual_count = output_len.saturating_sub(2);
@@ -130,9 +129,8 @@ pub fn decode_with_limits(
         let i = output.len();
         let previous = output[i - 1] as u16;
         let previous2 = output[i - 2] as u16;
-        let value = (residual as u16
-            + (alpha as u16 * previous)
-            + (beta as u16 * previous2)) & 0xff;
+        let value =
+            (residual as u16 + (alpha as u16 * previous) + (beta as u16 * previous2)) & 0xff;
         output.push(value as u8);
     }
     Ok(output)
@@ -141,8 +139,8 @@ pub fn decode_with_limits(
 fn forward_residual(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
     let mut residuals = Vec::with_capacity(input.len().saturating_sub(2));
     for i in 2..input.len() {
-        let prediction = (alpha as u16 * input[i - 1] as u16
-            + beta as u16 * input[i - 2] as u16) & 0xff;
+        let prediction =
+            (alpha as u16 * input[i - 1] as u16 + beta as u16 * input[i - 2] as u16) & 0xff;
         residuals.push((input[i] as u16).wrapping_sub(prediction) as u8);
     }
     residuals
@@ -202,7 +200,9 @@ fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError>
             i += 1;
             out.resize(out.len() + count, value);
         } else {
-            let end = i.checked_add(count).ok_or(TransformError::InvalidRunStream)?;
+            let end = i
+                .checked_add(count)
+                .ok_or(TransformError::InvalidRunStream)?;
             let literal = input.get(i..end).ok_or(TransformError::InvalidRunStream)?;
             out.extend_from_slice(literal);
             i = end;
@@ -240,12 +240,14 @@ mod tests {
     #[test]
     fn round_trip_deterministic_pseudorandom_data() {
         let mut state = 0x1234_5678_u32;
-        let input: Vec<u8> = (0..8192).map(|_| {
-            state ^= state << 13;
-            state ^= state >> 17;
-            state ^= state << 5;
-            state as u8
-        }).collect();
+        let input: Vec<u8> = (0..8192)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                state as u8
+            })
+            .collect();
         assert_eq!(decode(&encode(&input)).unwrap(), input);
     }
 
@@ -324,7 +326,10 @@ mod tests {
                             & 0xff;
                         reconstructed.push(value as u8);
                     }
-                    assert_eq!(reconstructed, input, "alpha={alpha}, beta={beta}, len={len}");
+                    assert_eq!(
+                        reconstructed, input,
+                        "alpha={alpha}, beta={beta}, len={len}"
+                    );
                 }
             }
         }
