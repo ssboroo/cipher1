@@ -65,7 +65,7 @@ jobs:
           git switch -c "$BRANCH"
           while IFS= read -r -d '' path; do
             case "$path" in
-              README.md|docs/*.md|crates/*/src/*.rs)
+              README.md|docs/*.md|crates/*/src/*.rs|crates/*/benches/*.rs)
                 git add -- "$path"
                 ;;
               *)
