@@ -47,26 +47,31 @@ impl Default for DecodeLimits {
 /// second-order modular residual transforms followed by a bounded PackBits-like
 /// run/literal coder. The selector includes all fixed header bytes in its cost.
 pub fn encode(input: &[u8]) -> Vec<u8> {
-    let mut best: Option<(usize, u8, u8, Vec<u8>)> = None;
+    // Score candidates without materializing 64 token buffers. Only the
+    // selected coefficient pair is encoded into an output vector.
+    let mut best: Option<(usize, u8, u8)> = None;
 
     for &alpha in &CANDIDATES {
         for &beta in &CANDIDATES {
-            let packed = pack_residuals_v3(input, alpha, beta);
-            let total = HEADER_LEN + packed.len();
-
-            let replace = best.as_ref().is_none_or(|(best_size, best_a, best_b, _)| {
+            let total = HEADER_LEN + residual_token_len(input, alpha, beta);
+            let replace = best.as_ref().is_none_or(|(best_size, best_a, best_b)| {
                 total < *best_size
                     || (total == *best_size && (alpha, beta) < (*best_a, *best_b))
             });
 
             if replace {
-                best = Some((total, alpha, beta, packed));
+                best = Some((total, alpha, beta));
             }
         }
     }
 
-    let (_, selected_alpha, selected_beta, packed) =
+    let (_, selected_alpha, selected_beta) =
         best.expect("candidate set is non-empty");
+    let packed = pack_residuals_v3(input, selected_alpha, selected_beta);
+    debug_assert_eq!(
+        packed.len(),
+        residual_token_len(input, selected_alpha, selected_beta)
+    );
     // Versions 2 and 3 use an explicit raw mode whenever token coding would not
     // reduce the payload. This bounds expansion to the fixed 17-byte header.
     let use_raw = packed.len() >= input.len();
@@ -271,6 +276,59 @@ fn pack_residuals_v3(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
         }
     }
     out
+}
+
+/// Return the exact v3 token-stream length without allocating or emitting
+/// token bytes. This scores all candidates before encoding only the winner.
+fn residual_token_len(input: &[u8], alpha: u8, beta: u8) -> usize {
+    let residual_count = input.len().saturating_sub(2);
+    let mut total = 0usize;
+    let mut i = 0usize;
+
+    while i < residual_count {
+        let value = residual_at(input, alpha, beta, i);
+        let mut run = 1usize;
+        while i + run < residual_count
+            && residual_at(input, alpha, beta, i + run) == value
+        {
+            run += 1;
+        }
+
+        if run >= 128 {
+            total += 2 + uleb128_len(run);
+            i += run;
+        } else if run >= 3 {
+            total += 2;
+            i += run;
+        } else {
+            let start = i;
+            while i < residual_count && i - start < 128 {
+                let next_value = residual_at(input, alpha, beta, i);
+                let mut next_run = 1usize;
+                while next_run < 3
+                    && i + next_run < residual_count
+                    && residual_at(input, alpha, beta, i + next_run) == next_value
+                {
+                    next_run += 1;
+                }
+                if next_run >= 3 {
+                    break;
+                }
+                i += next_run.min(128 - (i - start));
+            }
+            total += 1 + (i - start);
+        }
+    }
+    total
+}
+
+fn uleb128_len(mut value: usize) -> usize {
+    let mut length = 1usize;
+    while value >= 0x80 {
+        value >>= 7;
+        length += 1;
+    }
+    length
 }
 
 fn residual_at(input: &[u8], alpha: u8, beta: u8, residual_index: usize) -> u8 {
@@ -504,6 +562,12 @@ mod tests {
                         })
                         .collect();
                     let residuals = forward_residual(&input, alpha, beta);
+                    let packed = pack_residuals_v3(&input, alpha, beta);
+                    assert_eq!(
+                        residual_token_len(&input, alpha, beta),
+                        packed.len(),
+                        "token size mismatch for alpha={alpha}, beta={beta}, len={len}"
+                    );
                     let mut reconstructed = input.iter().take(2).copied().collect::<Vec<_>>();
                     for residual in residuals {
                         let n = reconstructed.len();
@@ -563,6 +627,16 @@ mod tests {
         let mut legacy_v2 = legacy_v1.clone();
         legacy_v2[4] = LEGACY_VERSION_2;
         assert_eq!(decode(&legacy_v2).unwrap(), input);
+    }
+
+    #[test]
+    fn token_size_estimator_matches_extended_run_boundaries() {
+        for len in 0..=512 {
+            let mut input = vec![0, 0];
+            input.extend(std::iter::repeat_n(0x5a, len));
+            let packed = pack_residuals_v3(&input, 0, 0);
+            assert_eq!(residual_token_len(&input, 0, 0), packed.len(), "length={len}");
+        }
     }
 
     #[test]
