@@ -57,7 +57,21 @@ jobs:
           fi
           BRANCH="autonomous/nexus-${GITHUB_RUN_ID}"
           git switch -c "$BRANCH"
-          git add crates docs README.md
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              README.md|docs/*.md|crates/*/src/*.rs)
+                git add -- "$path"
+                ;;
+              *)
+                echo "Refusing to stage an unexpected path: $path" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git diff --name-only -z)
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git commit -m "Autonomous NEXUS research iteration"
           gh auth setup-git
           git push origin "$BRANCH"
