@@ -399,17 +399,26 @@ mod tests {
 
     #[test]
     fn raw_mode_rejects_length_mismatch_and_noncanonical_seeds() {
-        let mut encoded = encode(&[0x91, 0x27, 0x44, 0x18]);
+        let mut state = 0x1319_8a2e_u32;
+        let input: Vec<u8> = (0..256)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                state as u8
+            })
+            .collect();
+        let mut encoded = encode(&input);
         assert_eq!(&encoded[5..7], &[RAW_MODE, RAW_MODE]);
 
         encoded.push(0);
         assert_eq!(decode(&encoded), Err(TransformError::InvalidLength));
 
-        let mut bad_seed = encode(&[0x91, 0x27, 0x44, 0x18]);
+        let mut bad_seed = encode(&input);
         bad_seed[15] = 1;
         assert_eq!(decode(&bad_seed), Err(TransformError::InvalidParameters));
 
-        let mut partial_marker = encode(&[0x91, 0x27, 0x44, 0x18]);
+        let mut partial_marker = encode(&input);
         partial_marker[6] = 0;
         assert_eq!(decode(&partial_marker), Err(TransformError::InvalidParameters));
     }
