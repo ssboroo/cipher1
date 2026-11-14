@@ -181,13 +181,7 @@ mod tests {
         let key = [0x42; KEY_LEN];
         for payload in [&[][..], &[0, 1, 2, 0, 255, 128, 42][..]] {
             let frame = seal(&key, payload, b"tenant=alpha").unwrap();
-            let decoded = open(
-                &frame,
-                &key,
-                b"tenant=alpha",
-                AeadDecodeLimits::default(),
-            )
-            .unwrap();
+            let decoded = open(&frame, &key, b"tenant=alpha", AeadDecodeLimits::default()).unwrap();
             assert_eq!(decoded.as_slice(), payload);
         }
     }
@@ -203,7 +197,12 @@ mod tests {
             Err(AeadFrameError::AuthenticationFailed)
         );
         assert_eq!(
-            open(&frame, &wrong_key, b"account:17", AeadDecodeLimits::default()),
+            open(
+                &frame,
+                &wrong_key,
+                b"account:17",
+                AeadDecodeLimits::default()
+            ),
             Err(AeadFrameError::AuthenticationFailed)
         );
     }
@@ -215,11 +214,15 @@ mod tests {
         let second = seal(&key, b"same plaintext", b"").unwrap();
         assert_ne!(first, second);
         assert_eq!(
-            open(&first, &key, b"", AeadDecodeLimits::default()).unwrap().as_slice(),
+            open(&first, &key, b"", AeadDecodeLimits::default())
+                .unwrap()
+                .as_slice(),
             b"same plaintext"
         );
         assert_eq!(
-            open(&second, &key, b"", AeadDecodeLimits::default()).unwrap().as_slice(),
+            open(&second, &key, b"", AeadDecodeLimits::default())
+                .unwrap()
+                .as_slice(),
             b"same plaintext"
         );
     }
@@ -237,7 +240,12 @@ mod tests {
         let mut nonce_tampered = seal(&key, b"authenticated", b"context").unwrap();
         nonce_tampered[5] ^= 1;
         assert_eq!(
-            open(&nonce_tampered, &key, b"context", AeadDecodeLimits::default()),
+            open(
+                &nonce_tampered,
+                &key,
+                b"context",
+                AeadDecodeLimits::default()
+            ),
             Err(AeadFrameError::AuthenticationFailed)
         );
 

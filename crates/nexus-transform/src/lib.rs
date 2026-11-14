@@ -39,7 +39,9 @@ pub struct DecodeLimits {
 
 impl Default for DecodeLimits {
     fn default() -> Self {
-        Self { max_output_len: 64 * 1024 * 1024 }
+        Self {
+            max_output_len: 64 * 1024 * 1024,
+        }
     }
 }
 
@@ -55,8 +57,7 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
             let total = HEADER_LEN + packed.len();
 
             let replace = best.as_ref().is_none_or(|(best_size, best_a, best_b, _)| {
-                total < *best_size
-                    || (total == *best_size && (alpha, beta) < (*best_a, *best_b))
+                total < *best_size || (total == *best_size && (alpha, beta) < (*best_a, *best_b))
             });
 
             if replace {
@@ -65,8 +66,7 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
         }
     }
 
-    let (_, selected_alpha, selected_beta, packed) =
-        best.expect("candidate set is non-empty");
+    let (_, selected_alpha, selected_beta, packed) = best.expect("candidate set is non-empty");
     // Versions 2 and 3 use an explicit raw mode whenever token coding would not
     // reduce the payload. This bounds expansion to the fixed 17-byte header.
     let use_raw = packed.len() >= input.len();
@@ -100,10 +100,7 @@ pub fn decode(input: &[u8]) -> Result<Vec<u8>, TransformError> {
     decode_with_limits(input, DecodeLimits::default())
 }
 
-pub fn decode_with_limits(
-    input: &[u8],
-    limits: DecodeLimits,
-) -> Result<Vec<u8>, TransformError> {
+pub fn decode_with_limits(input: &[u8], limits: DecodeLimits) -> Result<Vec<u8>, TransformError> {
     if input.len() < HEADER_LEN {
         return Err(TransformError::Truncated);
     }
@@ -137,15 +134,14 @@ pub fn decode_with_limits(
         }
         return Ok(raw.to_vec());
     }
-    if alpha == RAW_MODE || beta == RAW_MODE
+    if alpha == RAW_MODE
+        || beta == RAW_MODE
         || !CANDIDATES.contains(&alpha)
         || !CANDIDATES.contains(&beta)
     {
         return Err(TransformError::InvalidParameters);
     }
-    if (output_len == 0 && (seed0 != 0 || seed1 != 0))
-        || (output_len == 1 && seed1 != 0)
-    {
+    if (output_len == 0 && (seed0 != 0 || seed1 != 0)) || (output_len == 1 && seed1 != 0) {
         return Err(TransformError::InvalidParameters);
     }
     let residual_count = output_len.saturating_sub(2);
@@ -166,9 +162,8 @@ pub fn decode_with_limits(
         let i = output.len();
         let previous = output[i - 1] as u16;
         let previous2 = output[i - 2] as u16;
-        let value = (residual as u16
-            + (alpha as u16 * previous)
-            + (beta as u16 * previous2)) & 0xff;
+        let value =
+            (residual as u16 + (alpha as u16 * previous) + (beta as u16 * previous2)) & 0xff;
         output.push(value as u8);
     }
     Ok(output)
@@ -178,8 +173,8 @@ pub fn decode_with_limits(
 fn forward_residual(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
     let mut residuals = Vec::with_capacity(input.len().saturating_sub(2));
     for i in 2..input.len() {
-        let prediction = (alpha as u16 * input[i - 1] as u16
-            + beta as u16 * input[i - 2] as u16) & 0xff;
+        let prediction =
+            (alpha as u16 * input[i - 1] as u16 + beta as u16 * input[i - 2] as u16) & 0xff;
         residuals.push((input[i] as u16).wrapping_sub(prediction) as u8);
     }
     residuals
@@ -217,7 +212,6 @@ fn pack_runs(input: &[u8]) -> Vec<u8> {
     out
 }
 
-
 /// Encode residuals directly from the source bytes. This avoids allocating a
 /// full residual buffer for each of the 64 candidate coefficient pairs.
 fn pack_residuals_v3(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
@@ -228,9 +222,7 @@ fn pack_residuals_v3(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
     while i < residual_count {
         let value = residual_at(input, alpha, beta, i);
         let mut run = 1usize;
-        while i + run < residual_count
-            && residual_at(input, alpha, beta, i + run) == value
-        {
+        while i + run < residual_count && residual_at(input, alpha, beta, i + run) == value {
             run += 1;
         }
 
@@ -260,8 +252,7 @@ fn pack_residuals_v3(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
                 }
                 let take = next_run.min(literals.len() - (i - start));
                 for offset in 0..take {
-                    literals[i - start + offset] =
-                        residual_at(input, alpha, beta, i + offset);
+                    literals[i - start + offset] = residual_at(input, alpha, beta, i + offset);
                 }
                 i += take;
             }
@@ -275,9 +266,8 @@ fn pack_residuals_v3(input: &[u8], alpha: u8, beta: u8) -> Vec<u8> {
 
 fn residual_at(input: &[u8], alpha: u8, beta: u8, residual_index: usize) -> u8 {
     let i = residual_index + 2;
-    let prediction = (alpha as u16 * input[i - 1] as u16
-        + beta as u16 * input[i - 2] as u16)
-        & 0xff;
+    let prediction =
+        (alpha as u16 * input[i - 1] as u16 + beta as u16 * input[i - 2] as u16) & 0xff;
     (input[i] as u16).wrapping_sub(prediction) as u8
 }
 
@@ -300,7 +290,11 @@ fn read_uleb128(input: &[u8], start: usize) -> Result<(usize, usize), TransformE
     let mut shift = 0u32;
     for offset in 0..10usize {
         let byte = *input
-            .get(start.checked_add(offset).ok_or(TransformError::InvalidRunStream)?)
+            .get(
+                start
+                    .checked_add(offset)
+                    .ok_or(TransformError::InvalidRunStream)?,
+            )
             .ok_or(TransformError::InvalidRunStream)?;
         let part = (byte & 0x7f) as usize;
         if shift >= usize::BITS || part > (usize::MAX >> shift) {
@@ -353,7 +347,9 @@ fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformErr
             if out.len().checked_add(count).is_none_or(|n| n > expected) {
                 return Err(TransformError::InvalidRunStream);
             }
-            let end = i.checked_add(count).ok_or(TransformError::InvalidRunStream)?;
+            let end = i
+                .checked_add(count)
+                .ok_or(TransformError::InvalidRunStream)?;
             let literal = input.get(i..end).ok_or(TransformError::InvalidRunStream)?;
             out.extend_from_slice(literal);
             i = end;
@@ -389,7 +385,9 @@ fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError>
             i += 1;
             out.resize(out.len() + count, value);
         } else {
-            let end = i.checked_add(count).ok_or(TransformError::InvalidRunStream)?;
+            let end = i
+                .checked_add(count)
+                .ok_or(TransformError::InvalidRunStream)?;
             let literal = input.get(i..end).ok_or(TransformError::InvalidRunStream)?;
             out.extend_from_slice(literal);
             i = end;
@@ -427,12 +425,14 @@ mod tests {
     #[test]
     fn round_trip_deterministic_pseudorandom_data() {
         let mut state = 0x1234_5678_u32;
-        let input: Vec<u8> = (0..8192).map(|_| {
-            state ^= state << 13;
-            state ^= state >> 17;
-            state ^= state << 5;
-            state as u8
-        }).collect();
+        let input: Vec<u8> = (0..8192)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                state as u8
+            })
+            .collect();
         assert_eq!(decode(&encode(&input)).unwrap(), input);
     }
 
@@ -513,12 +513,14 @@ mod tests {
                             & 0xff;
                         reconstructed.push(value as u8);
                     }
-                    assert_eq!(reconstructed, input, "alpha={alpha}, beta={beta}, len={len}");
+                    assert_eq!(
+                        reconstructed, input,
+                        "alpha={alpha}, beta={beta}, len={len}"
+                    );
                 }
             }
         }
     }
-
 
     #[test]
     fn incompressible_input_uses_raw_mode_without_token_expansion() {
@@ -543,7 +545,10 @@ mod tests {
                 assert_eq!(&encoded[HEADER_LEN..], input.as_slice());
             }
         }
-        assert!(saw_raw_mode, "deterministic incompressible corpus should exercise raw mode");
+        assert!(
+            saw_raw_mode,
+            "deterministic incompressible corpus should exercise raw mode"
+        );
     }
 
     #[test]
@@ -567,7 +572,10 @@ mod tests {
 
     #[test]
     fn version_three_encodes_long_runs_compactly() {
-        for input in [vec![0x41; 16_384], (0..16_384).map(|i| (i % 2) as u8).collect()] {
+        for input in [
+            vec![0x41; 16_384],
+            (0..16_384).map(|i| (i % 2) as u8).collect(),
+        ] {
             let encoded = encode(&input);
             assert_eq!(encoded[4], VERSION);
             assert_eq!(decode(&encoded).unwrap(), input);
@@ -590,7 +598,10 @@ mod tests {
         short_extended[7..15].copy_from_slice(&127_u64.to_be_bytes());
         short_extended[18] = 0x7f;
         short_extended[19] = 0x41;
-        assert_eq!(decode(&short_extended), Err(TransformError::InvalidRunStream));
+        assert_eq!(
+            decode(&short_extended),
+            Err(TransformError::InvalidRunStream)
+        );
 
         let mut overlong = frame;
         overlong[18] = 0x81;
@@ -601,7 +612,10 @@ mod tests {
     #[test]
     fn raw_mode_rejects_length_mismatch_and_noncanonical_seeds() {
         let input: Vec<u8> = (0_u16..256)
-            .map(|i| (i.wrapping_mul(73).wrapping_add(i.wrapping_mul(i).wrapping_mul(19))) as u8)
+            .map(|i| {
+                (i.wrapping_mul(73)
+                    .wrapping_add(i.wrapping_mul(i).wrapping_mul(19))) as u8
+            })
             .collect();
         let mut encoded = Vec::with_capacity(HEADER_LEN + input.len());
         encoded.extend_from_slice(MAGIC);
@@ -625,7 +639,10 @@ mod tests {
 
         let mut partial_marker = encoded.clone();
         partial_marker[6] = 0;
-        assert_eq!(decode(&partial_marker), Err(TransformError::InvalidParameters));
+        assert_eq!(
+            decode(&partial_marker),
+            Err(TransformError::InvalidParameters)
+        );
 
         let mut legacy_raw = encoded;
         legacy_raw[4] = LEGACY_VERSION_2;

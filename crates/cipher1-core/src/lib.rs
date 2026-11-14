@@ -22,7 +22,9 @@ pub struct DecodeLimits {
 
 impl Default for DecodeLimits {
     fn default() -> Self {
-        Self { max_payload_len: 64 * 1024 * 1024 }
+        Self {
+            max_payload_len: 64 * 1024 * 1024,
+        }
     }
 }
 
@@ -73,10 +75,7 @@ pub fn decode(input: &[u8]) -> Result<DecodedFrame, FrameError> {
     decode_with_limits(input, DecodeLimits::default())
 }
 
-pub fn decode_with_limits(
-    input: &[u8],
-    limits: DecodeLimits,
-) -> Result<DecodedFrame, FrameError> {
+pub fn decode_with_limits(input: &[u8], limits: DecodeLimits) -> Result<DecodedFrame, FrameError> {
     if input.len() < HEADER_LEN {
         return Err(FrameError::TruncatedHeader);
     }
@@ -202,13 +201,13 @@ mod tests {
 
     #[test]
     fn enforces_payload_limit() {
-        let result = decode_with_limits(
-            &encode(b"payload"),
-            DecodeLimits { max_payload_len: 3 },
-        );
+        let result = decode_with_limits(&encode(b"payload"), DecodeLimits { max_payload_len: 3 });
         assert_eq!(
             result,
-            Err(FrameError::PayloadTooLarge { declared: 7, limit: 3 })
+            Err(FrameError::PayloadTooLarge {
+                declared: 7,
+                limit: 3
+            })
         );
     }
 }
