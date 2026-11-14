@@ -1,42 +1,41 @@
-# CIPHER-1
+# CIPHER-1 NEXUS
 
-CIPHER-1 is an experimental, versioned data-encoding and integrity framework written in Rust.
+CIPHER-1 NEXUS is an experimental research project exploring a new, modular data transformation and transport architecture. The goal is to investigate whether adaptive reversible mathematics, efficient coding, robust framing, optional error recovery, and cryptographic interoperability can form a useful cross-platform technology.
 
-## Research direction
+## Research principles
 
-The long-term research direction is a modular pipeline combining canonical framing, integrity verification, optional compression, optional error-correction coding, and authenticated encryption through established cryptographic algorithms.
+- Develop and test original mathematical hypotheses rather than relabel known algorithms.
+- Publish precise specifications, proofs, test vectors, and reproducible benchmarks.
+- Separate reversible encoding, compression, error correction, integrity, authentication, and encryption.
+- Never claim cryptographic security, novelty, or performance superiority without evidence.
+- Preserve interoperability and use established cryptographic standards for any security-sensitive deployment until a new primitive has survived independent review.
 
-## Current status
+## Current experimental components
 
-The first milestone is a binary framing and integrity prototype. It is not an encryption algorithm and does not provide confidentiality, sender authentication, replay protection, or quantum resistance. It must not be used to protect sensitive production data.
+- `crates/cipher1-core`: versioned binary framing and unkeyed BLAKE3 integrity check.
+- `crates/nexus-transform`: NEXUS Adaptive Residual Transform (NARF) prototype. It tests 64 second-order modular recurrence candidates and applies a bounded run/literal coder.
+- `docs/NEXUS_MATHEMATICAL_RESEARCH.md`: mathematical hypothesis, algebraic definition, and falsification criteria.
+- `docs/NEXUS_ALGORITHM_SPEC.md`: experimental wire format and decoder requirements.
+- `docs/NEXUS_VALIDATION_PLAN.md`: correctness, performance, platform, and security validation plan.
+- `docs/THREAT_MODEL.md`: current security boundaries.
 
-## Design principles
+## Important security notice
 
-- Strict, versioned binary format.
-- Bounded resource use when decoding untrusted input.
-- Deterministic encoding.
-- Modular and independently testable components.
-- Established cryptographic primitives rather than unreviewed custom cryptography.
-- Security and performance claims require reproducible evidence and independent review.
+NARF is not encryption and has no secret key. The existing frame digest is unkeyed and does not authenticate a sender. Neither component protects sensitive production data. Do not use this repository as a security product.
 
-## Repository layout
-
-- `crates/cipher1-core`: core frame codec.
-- `docs/ARCHITECTURE.md`: format and architecture.
-- `docs/THREAT_MODEL.md`: security scope and assumptions.
-
-## Quick start
+## Build and test
 
 Requirements: Rust stable toolchain.
 
 ```bash
 cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-## Security status
+## Target platforms
 
-Research software only. No production-security claim is made.
+The intended validation matrix includes Linux, Windows, macOS, Android, iOS, and WebAssembly. Support is not claimed until builds and conformance tests pass on each target.
 
-## License
+## Project maturity
 
-No license has been selected. All rights are reserved unless and until a license is added.
+Research prototype. Experimental formats may change. No production release, formal standard, security certification, or novelty claim is currently made.
