@@ -170,6 +170,11 @@ mod tests {
     use super::*;
 
     #[test]
+    fn key_generation_uses_fresh_random_material() {
+        assert_ne!(generate_key().unwrap(), generate_key().unwrap());
+    }
+
+    #[test]
     fn round_trips_empty_and_binary_payloads() {
         let key = [0x42; KEY_LEN];
         for payload in [&[][..], &[0, 1, 2, 0, 255, 128, 42][..]] {
@@ -224,6 +229,13 @@ mod tests {
         *frame.last_mut().unwrap() ^= 1;
         assert_eq!(
             open(&frame, &key, b"context", AeadDecodeLimits::default()),
+            Err(AeadFrameError::AuthenticationFailed)
+        );
+
+        let mut nonce_tampered = seal(&key, b"authenticated", b"context").unwrap();
+        nonce_tampered[5] ^= 1;
+        assert_eq!(
+            open(&nonce_tampered, &key, b"context", AeadDecodeLimits::default()),
             Err(AeadFrameError::AuthenticationFailed)
         );
 
