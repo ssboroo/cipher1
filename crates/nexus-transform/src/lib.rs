@@ -23,6 +23,8 @@ pub enum TransformError {
     OutputTooLarge,
     #[error("encoded stream has an invalid length")]
     InvalidLength,
+    #[error("transform parameters or unused seed bytes are non-canonical")]
+    InvalidParameters,
     #[error("run-length stream is malformed")]
     InvalidRunStream,
 }
@@ -96,6 +98,9 @@ pub fn decode_with_limits(
 
     let alpha = input[5];
     let beta = input[6];
+    if !CANDIDATES.contains(&alpha) || !CANDIDATES.contains(&beta) {
+        return Err(TransformError::InvalidParameters);
+    }
     let mut len_bytes = [0_u8; 8];
     len_bytes.copy_from_slice(&input[7..15]);
     let declared = u64::from_be_bytes(len_bytes);
@@ -106,6 +111,11 @@ pub fn decode_with_limits(
 
     let seed0 = input[15];
     let seed1 = input[16];
+    if (output_len == 0 && (seed0 != 0 || seed1 != 0))
+        || (output_len == 1 && seed1 != 0)
+    {
+        return Err(TransformError::InvalidParameters);
+    }
     let residual_count = output_len.saturating_sub(2);
     let residuals = unpack_runs(&input[HEADER_LEN..], residual_count)?;
     let mut output = Vec::with_capacity(output_len);
@@ -262,5 +272,76 @@ mod tests {
         let encoded = encode(&input);
         assert!(encoded.len() < input.len());
         assert_eq!(decode(&encoded).unwrap(), input);
+    }
+
+    #[test]
+    fn round_trip_all_single_byte_values_across_boundary_lengths() {
+        for value in 0_u8..=u8::MAX {
+            for len in 0..=260 {
+                let input = vec![value; len];
+                assert_eq!(decode(&encode(&input)).unwrap(), input);
+            }
+        }
+    }
+
+    #[test]
+    fn round_trip_deterministic_inputs_for_every_length_through_2048() {
+        let mut state = 0x9e37_79b9_u32;
+        for len in 0..=2048 {
+            let input: Vec<u8> = (0..len)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    state as u8
+                })
+                .collect();
+            assert_eq!(decode(&encode(&input)).unwrap(), input, "length={len}");
+        }
+    }
+
+    #[test]
+    fn rejects_non_candidate_coefficients() {
+        let mut encoded = encode(b"parameter validation");
+        encoded[5] = 4;
+        assert_eq!(decode(&encoded), Err(TransformError::InvalidParameters));
+    }
+
+    #[test]
+    fn rejects_nonzero_unused_seeds() {
+        let mut empty = encode(b"");
+        empty[15] = 1;
+        assert_eq!(decode(&empty), Err(TransformError::InvalidParameters));
+
+        let mut single = encode(b"x");
+        single[16] = 1;
+        assert_eq!(decode(&single), Err(TransformError::InvalidParameters));
+    }
+
+    #[test]
+    fn rejects_every_truncated_header_length() {
+        let encoded = encode(b"header truncation");
+        for end in 0..HEADER_LEN {
+            assert_eq!(decode(&encoded[..end]), Err(TransformError::Truncated));
+        }
+    }
+
+    #[test]
+    fn rejects_trailing_encoded_tokens() {
+        let mut encoded = encode(b"");
+        encoded.push(0);
+        encoded.push(0);
+        assert_eq!(decode(&encoded), Err(TransformError::InvalidRunStream));
+    }
+
+    #[test]
+    fn packer_round_trips_token_boundary_lengths() {
+        for len in [1, 2, 3, 127, 128, 129, 255, 256, 257, 511, 512] {
+            let literal: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+            assert_eq!(unpack_runs(&pack_runs(&literal), len).unwrap(), literal);
+
+            let repeated = vec![0xa5; len];
+            assert_eq!(unpack_runs(&pack_runs(&repeated), len).unwrap(), repeated);
+        }
     }
 }
