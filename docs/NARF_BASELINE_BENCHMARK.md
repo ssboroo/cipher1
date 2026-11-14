@@ -17,7 +17,7 @@ cargo bench -p nexus-transform --bench narf_baseline
 The executable writes CSV to standard output with these columns:
 
 - `dataset`: workload identifier.
-- `input_bytes`, `narf_bytes`, `lz4_bytes`, `zstd_bytes`, `brotli_bytes`, `pair_rle_bytes`: exact byte counts. Codec-specific framing is included; pair-RLE is a payload-only size reference.
+- `input_bytes`, `identity_bytes`, `narf_bytes`, `narf_ratio`, `lz4_bytes`, `zstd_bytes`, `brotli_bytes`, `pair_rle_bytes`: exact byte counts and NARF-to-input size ratio. Codec-specific framing is included; pair-RLE is a payload-only size reference.
 - Per-codec encode and decode nanoseconds per input byte for NARF, LZ4, Zstandard, and Brotli.
 
 ## Workloads
