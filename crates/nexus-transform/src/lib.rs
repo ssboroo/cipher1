@@ -7,8 +7,9 @@
 use thiserror::Error;
 
 const MAGIC: &[u8; 4] = b"NXAR";
-const VERSION: u8 = 2;
+const VERSION: u8 = 3;
 const LEGACY_VERSION: u8 = 1;
+const LEGACY_VERSION_2: u8 = 2;
 const RAW_MODE: u8 = 0xff;
 const HEADER_LEN: usize = 4 + 1 + 1 + 1 + 8 + 2;
 const CANDIDATES: [u8; 8] = [0, 1, 2, 3, 5, 8, 13, 21];
@@ -51,7 +52,7 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
     for &alpha in &CANDIDATES {
         for &beta in &CANDIDATES {
             let residuals = forward_residual(input, alpha, beta);
-            let packed = pack_runs(&residuals);
+            let packed = pack_runs_v3(&residuals);
             let total = HEADER_LEN + packed.len();
 
             let replace = best.as_ref().map_or(true, |(best_size, best_a, best_b, _)| {
@@ -111,7 +112,7 @@ pub fn decode_with_limits(
         return Err(TransformError::InvalidMagic);
     }
     let version = input[4];
-    if version != VERSION && version != LEGACY_VERSION {
+    if version != VERSION && version != LEGACY_VERSION && version != LEGACY_VERSION_2 {
         return Err(TransformError::UnsupportedVersion(version));
     }
 
@@ -128,7 +129,7 @@ pub fn decode_with_limits(
     let seed0 = input[15];
     let seed1 = input[16];
     if alpha == RAW_MODE && beta == RAW_MODE {
-        if version != VERSION || seed0 != 0 || seed1 != 0 {
+        if version == LEGACY_VERSION || seed0 != 0 || seed1 != 0 {
             return Err(TransformError::InvalidParameters);
         }
         let raw = &input[HEADER_LEN..];
@@ -149,7 +150,11 @@ pub fn decode_with_limits(
         return Err(TransformError::InvalidParameters);
     }
     let residual_count = output_len.saturating_sub(2);
-    let residuals = unpack_runs(&input[HEADER_LEN..], residual_count)?;
+    let residuals = if version == VERSION {
+        unpack_runs_v3(&input[HEADER_LEN..], residual_count)?
+    } else {
+        unpack_runs(&input[HEADER_LEN..], residual_count)?
+    };
     let mut output = Vec::with_capacity(output_len);
 
     if output_len >= 1 {
@@ -209,6 +214,135 @@ fn pack_runs(input: &[u8]) -> Vec<u8> {
         }
     }
     out
+}
+
+
+/// Version-3 token coding extends repeat runs with an unsigned LEB128 length.
+/// Control 0xff is reserved for an extended repeat; other high-bit controls
+/// encode repeats of 1..127 bytes. Literal controls remain 1..128 bytes.
+fn pack_runs_v3(input: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < input.len() {
+        let run = run_length_full(input, i);
+        if run >= 128 {
+            out.push(0xff);
+            write_uleb128(run, &mut out);
+            out.push(input[i]);
+            i += run;
+        } else if run >= 3 {
+            out.push(0x80 | ((run - 1) as u8));
+            out.push(input[i]);
+            i += run;
+        } else {
+            let start = i;
+            i += run;
+            while i < input.len() && i - start < 128 {
+                let next_run = run_length_full(input, i);
+                if next_run >= 3 {
+                    break;
+                }
+                let take = next_run.min(128 - (i - start));
+                i += take;
+            }
+            let count = i - start;
+            out.push((count - 1) as u8);
+            out.extend_from_slice(&input[start..i]);
+        }
+    }
+    out
+}
+
+fn run_length_full(input: &[u8], start: usize) -> usize {
+    let mut end = start + 1;
+    while end < input.len() && input[end] == input[start] {
+        end += 1;
+    }
+    end - start
+}
+
+fn write_uleb128(mut value: usize, out: &mut Vec<u8>) {
+    loop {
+        let mut byte = (value & 0x7f) as u8;
+        value >>= 7;
+        if value != 0 {
+            byte |= 0x80;
+        }
+        out.push(byte);
+        if value == 0 {
+            break;
+        }
+    }
+}
+
+fn read_uleb128(input: &[u8], start: usize) -> Result<(usize, usize), TransformError> {
+    let mut value = 0usize;
+    let mut shift = 0u32;
+    for offset in 0..10usize {
+        let byte = *input
+            .get(start.checked_add(offset).ok_or(TransformError::InvalidRunStream)?)
+            .ok_or(TransformError::InvalidRunStream)?;
+        let part = (byte & 0x7f) as usize;
+        if shift >= usize::BITS || part > (usize::MAX >> shift) {
+            return Err(TransformError::InvalidRunStream);
+        }
+        value |= part << shift;
+        if byte & 0x80 == 0 {
+            if offset > 0 && part == 0 {
+                return Err(TransformError::InvalidRunStream);
+            }
+            return Ok((value, offset + 1));
+        }
+        shift = shift
+            .checked_add(7)
+            .ok_or(TransformError::InvalidRunStream)?;
+    }
+    Err(TransformError::InvalidRunStream)
+}
+
+fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
+    let mut out = Vec::with_capacity(expected);
+    let mut i = 0usize;
+    while i < input.len() {
+        let control = input[i];
+        i += 1;
+        if control == 0xff {
+            let (count, consumed) = read_uleb128(input, i)?;
+            if count < 128 {
+                return Err(TransformError::InvalidRunStream);
+            }
+            i = i
+                .checked_add(consumed)
+                .ok_or(TransformError::InvalidRunStream)?;
+            if out.len().checked_add(count).map_or(true, |n| n > expected) {
+                return Err(TransformError::InvalidRunStream);
+            }
+            let value = *input.get(i).ok_or(TransformError::InvalidRunStream)?;
+            i += 1;
+            out.resize(out.len() + count, value);
+        } else if control & 0x80 != 0 {
+            let count = (control as usize & 0x7f) + 1;
+            if count < 3 || out.len().checked_add(count).map_or(true, |n| n > expected) {
+                return Err(TransformError::InvalidRunStream);
+            }
+            let value = *input.get(i).ok_or(TransformError::InvalidRunStream)?;
+            i += 1;
+            out.resize(out.len() + count, value);
+        } else {
+            let count = (control as usize & 0x7f) + 1;
+            if out.len().checked_add(count).map_or(true, |n| n > expected) {
+                return Err(TransformError::InvalidRunStream);
+            }
+            let end = i.checked_add(count).ok_or(TransformError::InvalidRunStream)?;
+            let literal = input.get(i..end).ok_or(TransformError::InvalidRunStream)?;
+            out.extend_from_slice(literal);
+            i = end;
+        }
+    }
+    if out.len() != expected {
+        return Err(TransformError::InvalidRunStream);
+    }
+    Ok(out)
 }
 
 fn run_length(input: &[u8], start: usize) -> usize {
@@ -392,12 +526,54 @@ mod tests {
     }
 
     #[test]
-    fn decoder_accepts_legacy_version_one_streams() {
+    fn decoder_accepts_legacy_version_one_and_two_streams() {
         let input = vec![0x5a; 512];
-        let mut legacy = encode(&input);
-        assert_ne!(legacy[5], RAW_MODE);
-        legacy[4] = LEGACY_VERSION;
-        assert_eq!(decode(&legacy).unwrap(), input);
+        let residuals = forward_residual(&input, 0, 0);
+        let old_tokens = pack_runs(&residuals);
+        let mut legacy_v1 = Vec::with_capacity(HEADER_LEN + old_tokens.len());
+        legacy_v1.extend_from_slice(MAGIC);
+        legacy_v1.push(LEGACY_VERSION);
+        legacy_v1.extend_from_slice(&[0, 0]);
+        legacy_v1.extend_from_slice(&(input.len() as u64).to_be_bytes());
+        legacy_v1.extend_from_slice(&[input[0], input[1]]);
+        legacy_v1.extend_from_slice(&old_tokens);
+        assert_eq!(decode(&legacy_v1).unwrap(), input);
+
+        let mut legacy_v2 = legacy_v1.clone();
+        legacy_v2[4] = LEGACY_VERSION_2;
+        assert_eq!(decode(&legacy_v2).unwrap(), input);
+    }
+
+    #[test]
+    fn version_three_encodes_long_runs_compactly() {
+        for input in [vec![0x41; 16_384], (0..16_384).map(|i| (i % 4) as u8).collect()] {
+            let encoded = encode(&input);
+            assert_eq!(encoded[4], VERSION);
+            assert_eq!(decode(&encoded).unwrap(), input);
+            assert!(encoded.len() < 64, "encoded size was {}", encoded.len());
+        }
+    }
+
+    #[test]
+    fn version_three_rejects_malformed_extended_runs() {
+        let mut frame = Vec::new();
+        frame.extend_from_slice(MAGIC);
+        frame.push(VERSION);
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&129_u64.to_be_bytes());
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&[0xff, 0x81, 0x00, 0x41]);
+        assert_eq!(decode(&frame), Err(TransformError::InvalidRunStream));
+
+        let mut short_extended = frame.clone();
+        short_extended[7..15].copy_from_slice(&127_u64.to_be_bytes());
+        short_extended[19] = 0x7f;
+        assert_eq!(decode(&short_extended), Err(TransformError::InvalidRunStream));
+
+        let mut overlong = frame;
+        overlong[18] = 0x80;
+        overlong[19] = 0x00;
+        assert_eq!(decode(&overlong), Err(TransformError::InvalidRunStream));
     }
 
     #[test]
