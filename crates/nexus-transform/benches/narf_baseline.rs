@@ -101,7 +101,7 @@ where
 
 fn main() {
     println!(
-        "dataset,input_bytes,narf_bytes,lz4_bytes,zstd_bytes,brotli_bytes,pair_rle_bytes,narf_encode_ns_per_byte,narf_decode_ns_per_byte,lz4_encode_ns_per_byte,lz4_decode_ns_per_byte,zstd_encode_ns_per_byte,zstd_decode_ns_per_byte,brotli_encode_ns_per_byte,brotli_decode_ns_per_byte"
+        "dataset,input_bytes,identity_bytes,narf_bytes,narf_ratio,lz4_bytes,zstd_bytes,brotli_bytes,pair_rle_bytes,narf_encode_ns_per_byte,narf_decode_ns_per_byte,lz4_encode_ns_per_byte,lz4_decode_ns_per_byte,zstd_encode_ns_per_byte,zstd_decode_ns_per_byte,brotli_encode_ns_per_byte,brotli_decode_ns_per_byte"
     );
 
     for (name, input) in datasets() {
@@ -136,9 +136,11 @@ fn main() {
         let brotli_decode = measure_decode(&brotli, input.len(), brotli_decompress);
 
         println!(
-            "{name},{},{},{},{},{},{},{narf_encode:.3},{narf_decode:.3},{lz4_encode:.3},{lz4_decode:.3},{zstd_encode:.3},{zstd_decode:.3},{brotli_encode:.3},{brotli_decode:.3}",
+            "{name},{},{},{},{:.6},{},{},{},{},{narf_encode:.3},{narf_decode:.3},{lz4_encode:.3},{lz4_decode:.3},{zstd_encode:.3},{zstd_decode:.3},{brotli_encode:.3},{brotli_decode:.3}",
+            input.len(),
             input.len(),
             narf.len(),
+            narf.len() as f64 / input.len() as f64,
             lz4.len(),
             zstd.len(),
             brotli.len(),
