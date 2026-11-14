@@ -23,7 +23,7 @@ Never put an API key in source code, workflow YAML, issues, or commit messages. 
 - Pushes a dedicated `autonomous/nexus-*` branch and attempts to open a pull request. The repository setting **Settings → Actions → General → Workflow permissions → Allow GitHub Actions to create and approve pull requests** must be enabled for automatic PR creation. If disabled, the branch and cross-platform CI still run, but the PR step reports a warning.
 - Never pushes model-generated code directly to `main` and never auto-merges.
 - If no justified patch is proposed, it exits without a commit.
-- If either `OPENAI_API_KEY` or `OPENAI_MODEL` is absent, AI patch generation is skipped and a warning is emitted; validation still runs.
+- If either `OPENAI_API_KEY` or `OPENAI_MODEL` is absent, AI patch generation is skipped and a warning is emitted; validation and commit stages are also skipped.
 
 ## Safety and limitations
 
