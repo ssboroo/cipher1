@@ -1,6 +1,6 @@
 # NEXUS Decoder Fuzzing
 
-The `fuzz/` package is a separate cargo-fuzz workspace and is intentionally not included in the stable root Cargo workspace.
+The `fuzz/` package is a separate cargo-fuzz workspace and is intentionally not included in the stable root Cargo workspace. It contains targets for arbitrary NARF decoder inputs and arbitrary C1AE authenticated-frame inputs.
 
 ## Run locally
 
