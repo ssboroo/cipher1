@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Install Python
         uses: actions/setup-python@v5
         with:
@@ -37,7 +38,7 @@ jobs:
       - name: Generate one bounded research patch
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-6-astra' }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SHA: ${{ github.sha }}
         run: python scripts/autonomous_rnd.py
@@ -49,6 +50,8 @@ jobs:
           cargo clippy --workspace --all-targets -- -D warnings
       - name: Create isolated branch and commit
         id: commit
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -58,11 +61,13 @@ jobs:
           git switch -c "$BRANCH"
           git add crates docs README.md
           git commit -m "Autonomous NEXUS research iteration"
+          gh auth setup-git
           git push origin "$BRANCH"
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
       - name: Open review pull request
         if: steps.commit.outputs.changed == 'true'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
