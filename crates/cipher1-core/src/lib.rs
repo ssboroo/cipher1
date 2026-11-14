@@ -1,3 +1,5 @@
+pub mod aead;
+
 //! CIPHER-1 version 1 frame codec.
 //!
 //! This module provides framing and integrity verification only.
