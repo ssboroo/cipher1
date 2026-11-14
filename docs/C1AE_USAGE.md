@@ -24,7 +24,7 @@ fn example() -> Result<(), Box<dyn std::error::Error>> {
         context,
         AeadDecodeLimits::default(),
     )?;
-    assert_eq!(plaintext, b"example plaintext");
+    assert_eq!(plaintext.as_slice(), b"example plaintext");
     Ok(())
 }
 ```
@@ -44,7 +44,8 @@ fn example() -> Result<(), Box<dyn std::error::Error>> {
 ## Security limitations
 
 - Keep keys in a secret manager or platform key store. Never commit, log, or
-  embed production keys in binaries.
+  embed production keys in binaries. The zeroizing wrappers clear their own
+  buffers on drop, but copies or serialized forms are not automatically cleared.
 - The API does not implement password-based key derivation, key exchange,
   rotation, revocation, recovery, or sender identity.
 - All holders of the same symmetric key can create valid frames. AEAD alone
