@@ -368,6 +368,7 @@ mod tests {
     #[test]
     fn incompressible_input_uses_raw_mode_without_token_expansion() {
         let mut state = 0x243f_6a88_u32;
+        let mut saw_raw_mode = false;
         for len in 0..=4096 {
             let input: Vec<u8> = (0..len)
                 .map(|_| {
@@ -381,11 +382,13 @@ mod tests {
             assert!(encoded.len() <= HEADER_LEN + input.len(), "length={len}");
             assert_eq!(decode(&encoded).unwrap(), input);
             if encoded[5] == RAW_MODE {
+                saw_raw_mode = true;
                 assert_eq!(&encoded[5..7], &[RAW_MODE, RAW_MODE]);
                 assert_eq!(&encoded[15..17], &[0, 0]);
                 assert_eq!(&encoded[HEADER_LEN..], input.as_slice());
             }
         }
+        assert!(saw_raw_mode, "deterministic incompressible corpus should exercise raw mode");
     }
 
     #[test]
@@ -399,17 +402,17 @@ mod tests {
 
     #[test]
     fn raw_mode_rejects_length_mismatch_and_noncanonical_seeds() {
-        let mut state = 0x1319_8a2e_u32;
         let input: Vec<u8> = (0..256)
-            .map(|_| {
-                state ^= state << 13;
-                state ^= state >> 17;
-                state ^= state << 5;
-                state as u8
-            })
+            .map(|i| (i.wrapping_mul(73).wrapping_add(i.wrapping_mul(i).wrapping_mul(19))) as u8)
             .collect();
-        let mut encoded = encode(&input);
-        assert_eq!(&encoded[5..7], &[RAW_MODE, RAW_MODE]);
+        let mut encoded = Vec::with_capacity(HEADER_LEN + input.len());
+        encoded.extend_from_slice(MAGIC);
+        encoded.push(VERSION);
+        encoded.extend_from_slice(&[RAW_MODE, RAW_MODE]);
+        encoded.extend_from_slice(&(input.len() as u64).to_be_bytes());
+        encoded.extend_from_slice(&[0, 0]);
+        encoded.extend_from_slice(&input);
+        assert_eq!(decode(&encoded).unwrap(), input);
 
         encoded.push(0);
         assert_eq!(decode(&encoded), Err(TransformError::InvalidLength));
