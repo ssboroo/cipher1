@@ -117,7 +117,7 @@ pub fn open(
     key: &[u8; KEY_LEN],
     associated_data: &[u8],
     limits: AeadDecodeLimits,
-) -> Result<Vec<u8>, AeadFrameError> {
+) -> Result<Zeroizing<Vec<u8>>, AeadFrameError> {
     if input.len() < HEADER_LEN + TAG_LEN {
         return Err(AeadFrameError::Truncated);
     }
@@ -155,7 +155,7 @@ pub fn open(
 
     let cipher = XChaCha20Poly1305::new_from_slice(key)
         .expect("the fixed-size key always has the required length");
-    cipher
+    let plaintext = cipher
         .decrypt(
             XNonce::from_slice(&input[5..5 + NONCE_LEN]),
             Payload {
@@ -163,7 +163,8 @@ pub fn open(
                 aad: &authenticated_data,
             },
         )
-        .map_err(|_| AeadFrameError::AuthenticationFailed)
+        .map_err(|_| AeadFrameError::AuthenticationFailed)?;
+    Ok(Zeroizing::new(plaintext))
 }
 
 #[cfg(test)]
@@ -187,7 +188,7 @@ mod tests {
                 AeadDecodeLimits::default(),
             )
             .unwrap();
-            assert_eq!(decoded, payload);
+            assert_eq!(decoded.as_slice(), payload);
         }
     }
 
@@ -214,11 +215,11 @@ mod tests {
         let second = seal(&key, b"same plaintext", b"").unwrap();
         assert_ne!(first, second);
         assert_eq!(
-            open(&first, &key, b"", AeadDecodeLimits::default()).unwrap(),
+            open(&first, &key, b"", AeadDecodeLimits::default()).unwrap().as_slice(),
             b"same plaintext"
         );
         assert_eq!(
-            open(&second, &key, b"", AeadDecodeLimits::default()).unwrap(),
+            open(&second, &key, b"", AeadDecodeLimits::default()).unwrap().as_slice(),
             b"same plaintext"
         );
     }
