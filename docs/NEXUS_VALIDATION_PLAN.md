@@ -6,6 +6,7 @@
 - Property-test random byte arrays with fixed and generated seeds.
 - Fuzz the decoder with arbitrary byte streams.
 - Test length overflow, truncated headers, invalid versions, truncated literals, truncated runs, excessive output declarations, and trailing data.
+- Exercise allocation-capacity overflow with caller limits raised to the platform maximum; decoding must return a defined error rather than panic.
 - Verify version-2/3 raw fallback for incompressible inputs and assert encoded_size <= input_size + 17 for all generated inputs.
 - Verify version-3 extended runs, canonical ULEB128 parsing, overflow rejection, and version-1/version-2 compatibility.
 - Verify version-1 decode compatibility and reject non-canonical raw-mode markers, seeds, and payload lengths.
