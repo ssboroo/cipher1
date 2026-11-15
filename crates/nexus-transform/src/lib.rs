@@ -506,7 +506,6 @@ mod tests {
         assert_eq!(decode(&encode(&input)).unwrap(), input);
     }
 
-
     #[test]
     fn decoder_reports_failed_reservations_instead_of_panicking() {
         assert_eq!(
