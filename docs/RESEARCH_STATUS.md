@@ -1,6 +1,6 @@
 # CIPHER-1 NEXUS Research Status
 
-Last updated: 2026-11-14
+Last updated: 2026-11-16
 
 ## Executive status
 
@@ -19,7 +19,7 @@ cryptographic algorithm.
 
 ### C1AE authenticated envelope
 
-- Version-1 frame using the standardized XChaCha20-Poly1305 AEAD.
+- Version-1 frame using XChaCha20-Poly1305.
 - 256-bit caller-managed key; helper generates key material using the OS CSPRNG.
 - Fresh 192-bit random nonce per seal operation.
 - Authenticated header and caller-supplied associated data.
@@ -37,29 +37,51 @@ cryptographic algorithm.
 - Version-3 decoder retains version-1 and version-2 read compatibility.
 - Fixed-coefficient transform bijectivity is established by a lower-triangular
   matrix argument with unit diagonal.
+- Decoder-owned output and residual buffers use fallible capacity reservations;
+  allocation reservation failures map to `AllocationFailed`.
+- The caller-controlled output limit remains the primary resource policy.
 - The recurrence family and token coding are engineering hypotheses, not a
   demonstrated novel compression method or a cryptographic primitive.
 
-## Recent decoder hardening
-
-- NARF decoding now uses fallible reservations for raw output, residual buffers, and reconstructed output. Capacity failures map to `AllocationFailed` rather than invoking infallible `Vec::with_capacity` on untrusted declared lengths.
-- A regression test exercises an extreme declared output length with the caller limit explicitly raised to the platform maximum. This covers capacity-overflow handling; it does not replace process-level memory limits or fuzzing.
-
 ## Validation and automation
 
-- Rust CI matrix: Ubuntu, Windows, and macOS.
+- Rust CI workspace tests run on Ubuntu, Windows, and macOS.
 - Declared runtime library MSRV: Rust 1.85.
-- Cross-target compile checks: WebAssembly, Android ARM64, iOS ARM64, and
-  Windows ARM64.
-- CI checks known-compromised Rust crate versions in the resolved dependency
-  graph.
-- NARF benchmark compares identity, LZ4, Zstandard, and Brotli on five
-  deterministic synthetic workloads. Raw CSV is archived by CI.
-- Daily fuzz workflow exercises NARF and C1AE decoders with bounded outputs.
-- Hourly autonomous R&D workflow also runs after source/documentation changes
-  on main; it proposes one bounded patch on an isolated branch and is designed
-  to open a review pull request. Automated changes are
-  not merged without review.
+- Linux CI additionally runs Clippy with `-D warnings`, dependency supply-chain
+  checks, cross-target compilation for WebAssembly, Android ARM64, iOS ARM64,
+  and Windows ARM64, plus the benchmark harness.
+- Decoder fuzz workflow exercises NARF and C1AE decoders with bounded outputs.
+- The benchmark compares identity, framed pair-RLE, NARF v3, LZ4, Zstandard,
+  and Brotli on five deterministic synthetic 16 KiB workloads. It reports full
+  encoded sizes and 30 individually timed encode/decode samples after five
+  warm-ups, with nearest-rank p50/p95/p99.
+- Benchmark metadata records Rust/Cargo versions and Linux runner, kernel, and
+  CPU information when available.
+- See [BENCHMARK_METHODOLOGY.md](BENCHMARK_METHODOLOGY.md) for framing rules,
+  reproducibility details, and limitations.
+
+## Recent merged work
+
+- PR #1 merged as commit `bfdc377a0218d22912e02917f44adbeeca722d5b`.
+  It adds fallible decoder capacity reservations, a defined allocation error,
+  and an extreme-capacity regression test. Rust CI and decoder fuzz workflows
+  passed for the PR head.
+- The benchmark harness work is being rebased onto the updated main branch
+  because the original PR branch diverged after PR #1 merged. The original
+  benchmark PR's Rust CI and fuzz workflows passed; the rebased PR must pass
+  its own checks before merge.
+
+## Current review findings
+
+- NARF v3 encoding is deterministic, but the decoder accepts more than one
+  valid token segmentation for some residual sequences. Canonical
+  unsigned-LEB128 lengths are enforced; whole-stream token canonicality is
+  not currently a decoder requirement. Any strict-canonical mode requires an
+  explicit compatibility decision and conformance tests.
+- Fallible reservation does not guarantee process liveness under OS memory
+  overcommit or physical-memory exhaustion.
+- The benchmark-only pair-RLE decoder is for trusted harness data, not an
+  exposed untrusted-input API.
 
 ## Evidence still required
 
@@ -70,18 +92,26 @@ cryptographic algorithm.
 - External cryptographic review of C1AE integration and key-management design.
 - Replay-protection protocol and sender-identity model for network use.
 - Prior-art and patent review before any novelty claim.
-- Independent cryptanalysis before any custom cryptographic primitive could be
-  considered.
+- Independent cryptanalysis before any custom cryptographic primitive could
+  be considered.
 
 ## Next engineering priorities
 
-1. The exact token-size estimator is implemented and validated; the first
-   post-optimization CI run showed a directional 26–29% encode-time reduction
-   on four synthetic fixtures. Repeat the experiment on multiple runs and
-   representative public corpora before accepting the improvement.
-2. Prototype block-adaptive coefficient selection only if representative
-   workloads justify its metadata and CPU cost.
+1. Establish NARF token canonicality with explicit accepted/rejected vectors and
+   a backward-compatibility decision.
+2. Expand the benchmark to versioned public corpora with recorded licenses,
+   checksums, and preprocessing; repeat measurements on comparable hardware.
 3. Add stable cross-language conformance vectors for C1NX, C1AE, and NARF.
-4. Keep C1AE based on reviewed primitives; focus research on protocol,
+4. Measure peak memory, streaming behavior, and platform runtime behavior.
+5. Keep C1AE based on reviewed primitives; focus research on protocol,
    interoperability, key lifecycle, and safe composition.
-5. Preserve strict CI, fuzzing, dependency review, and human review gates.
+6. Preserve strict CI, fuzzing, dependency review, and human review gates.
+
+## Release gates
+
+No production release until the interoperable specification is frozen,
+independent implementations pass conformance tests, benchmark results are
+reproducible, platform CI is broad, external security review supports any
+security claims, licensing/governance/disclosure policies exist, and
+operational documentation is complete. Meeting only some gates is not
+completion.
