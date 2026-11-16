@@ -26,7 +26,7 @@ Compare against:
 
 Use public corpora and legally distributable samples: Canterbury, Silesia, Calgary, enwik8 where licensing permits, synthetic periodic data, repeated records, JSON, CSV, source code, images, audio, and encrypted/random data.
 
-Report total bytes including every header and metadata field.
+Report total bytes including every header and metadata field. The CI pair-RLE baseline uses an explicit 8-byte frame header; LZ4 uses its size-prepended frame; Zstandard and Brotli report their complete streams. Identity is raw bytes without an added wrapper because it is a lower-bound reference when the caller already knows the input length. Record compiler, runner, kernel, and CPU metadata with each CI artifact. See [BENCHMARK_METHODOLOGY.md](BENCHMARK_METHODOLOGY.md) for the current synthetic harness and its limitations.
 
 ## Phase 2 — Performance
 
