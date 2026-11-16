@@ -1,6 +1,6 @@
 # CIPHER-1 NEXUS Research Status
 
-Last updated: 2026-11-14
+Last updated: 2026-11-16
 
 ## Executive status
 
@@ -48,13 +48,29 @@ cryptographic algorithm.
   Windows ARM64.
 - CI checks known-compromised Rust crate versions in the resolved dependency
   graph.
-- NARF benchmark compares identity, LZ4, Zstandard, and Brotli on five
-  deterministic synthetic workloads. Raw CSV is archived by CI.
+- The current benchmark branch compares identity, framed pair-RLE, NARF,
+  LZ4, Zstandard, and Brotli on five deterministic synthetic workloads. It
+  counts complete encoded streams and records 30 per-operation timing samples
+  after five warm-ups, with nearest-rank p50/p95/p99. The revised harness is
+  awaiting CI validation; no performance conclusion is drawn from it.
+- The benchmark methodology documents synthetic-only coverage, framing rules,
+  runner metadata, and the limits of 30-sample tail percentiles.
 - Daily fuzz workflow exercises NARF and C1AE decoders with bounded outputs.
 - Hourly autonomous R&D workflow also runs after source/documentation changes
   on main; it proposes one bounded patch on an isolated branch and is designed
   to open a review pull request. Automated changes are
   not merged without review.
+
+## Current review findings
+
+- Draft PR #1 proposes fallible decoder capacity reservations. Its pull-request
+  Rust CI and fuzz workflows passed, but it remains unmerged and the default
+  branch does not yet contain that change.
+- NARF v3 encoding is deterministic, but the decoder currently accepts more
+  than one valid token segmentation for some residual sequences. Canonical
+  unsigned-LEB128 lengths are enforced; whole-stream token canonicality is not
+  currently a decoder requirement. A future strict-canonical mode would need
+  an explicit compatibility decision and conformance tests.
 
 ## Evidence still required
 
