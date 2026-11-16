@@ -57,6 +57,7 @@ Evaluate all 64 coefficient pairs. For the transformed representation, cost equa
 - For raw mode, require both coefficients to equal `0xff`, both seed bytes to be zero, and body length to equal the declared output length.
 - Parse length with checked conversion to the platform size.
 - Enforce caller-supplied maximum output size.
+- Use fallible capacity reservation for every decoder-owned output buffer and return a defined allocation error if reservation fails; do not use infallible capacity constructors for untrusted declared lengths.
 - Check token boundaries and output growth with checked arithmetic.
 - Reconstruct using the recurrence in modulo-256 arithmetic.
 - Reject malformed or trailing token bytes that do not produce exactly the declared residual count.

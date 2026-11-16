@@ -28,6 +28,8 @@ pub enum TransformError {
     InvalidLength,
     #[error("transform parameters or unused seed bytes are non-canonical")]
     InvalidParameters,
+    #[error("memory reservation failed while decoding")]
+    AllocationFailed,
     #[error("run-length stream is malformed")]
     InvalidRunStream,
 }
@@ -100,6 +102,14 @@ pub fn encode(input: &[u8]) -> Vec<u8> {
     output
 }
 
+fn try_vec_with_capacity(capacity: usize) -> Result<Vec<u8>, TransformError> {
+    let mut output = Vec::new();
+    output
+        .try_reserve_exact(capacity)
+        .map_err(|_| TransformError::AllocationFailed)?;
+    Ok(output)
+}
+
 /// Decode an NEXUS residual stream, enforcing a caller-controlled allocation limit.
 pub fn decode(input: &[u8]) -> Result<Vec<u8>, TransformError> {
     decode_with_limits(input, DecodeLimits::default())
@@ -140,7 +150,9 @@ pub fn decode_with_limits(
         if raw.len() != output_len {
             return Err(TransformError::InvalidLength);
         }
-        return Ok(raw.to_vec());
+        let mut output = try_vec_with_capacity(output_len)?;
+        output.extend_from_slice(raw);
+        return Ok(output);
     }
     if alpha == RAW_MODE || beta == RAW_MODE
         || !CANDIDATES.contains(&alpha)
@@ -159,7 +171,7 @@ pub fn decode_with_limits(
     } else {
         unpack_runs(&input[HEADER_LEN..], residual_count)?
     };
-    let mut output = Vec::with_capacity(output_len);
+    let mut output = try_vec_with_capacity(output_len)?;
 
     if output_len >= 1 {
         output.push(seed0);
@@ -379,7 +391,7 @@ fn read_uleb128(input: &[u8], start: usize) -> Result<(usize, usize), TransformE
 }
 
 fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
-    let mut out = Vec::with_capacity(expected);
+    let mut out = try_vec_with_capacity(expected)?;
     let mut i = 0usize;
     while i < input.len() {
         let control = input[i];
@@ -433,7 +445,7 @@ fn run_length(input: &[u8], start: usize) -> usize {
 }
 
 fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
-    let mut out = Vec::with_capacity(expected);
+    let mut out = try_vec_with_capacity(expected)?;
     let mut i = 0;
     while i < input.len() {
         let control = input[i];
@@ -492,6 +504,33 @@ mod tests {
             state as u8
         }).collect();
         assert_eq!(decode(&encode(&input)).unwrap(), input);
+    }
+
+    #[test]
+    fn decoder_reports_failed_reservations_instead_of_panicking() {
+        assert_eq!(
+            try_vec_with_capacity(usize::MAX),
+            Err(TransformError::AllocationFailed)
+        );
+
+        let mut frame = Vec::new();
+        frame.extend_from_slice(MAGIC);
+        frame.push(VERSION);
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&u64::MAX.to_be_bytes());
+        frame.extend_from_slice(&[0, 0]);
+
+        let result = decode_with_limits(
+            &frame,
+            DecodeLimits {
+                max_output_len: usize::MAX,
+            },
+        );
+        if usize::BITS < 64 {
+            assert_eq!(result, Err(TransformError::OutputTooLarge));
+        } else {
+            assert_eq!(result, Err(TransformError::AllocationFailed));
+        }
     }
 
     #[test]

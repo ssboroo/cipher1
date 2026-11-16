@@ -40,6 +40,11 @@ cryptographic algorithm.
 - The recurrence family and token coding are engineering hypotheses, not a
   demonstrated novel compression method or a cryptographic primitive.
 
+## Recent decoder hardening
+
+- NARF decoding now uses fallible reservations for raw output, residual buffers, and reconstructed output. Capacity failures map to `AllocationFailed` rather than invoking infallible `Vec::with_capacity` on untrusted declared lengths.
+- A regression test exercises an extreme declared output length with the caller limit explicitly raised to the platform maximum. This covers capacity-overflow handling; it does not replace process-level memory limits or fuzzing.
+
 ## Validation and automation
 
 - Rust CI matrix: Ubuntu, Windows, and macOS.
