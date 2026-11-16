@@ -20,14 +20,16 @@ Exit criteria: exact round-trip for all generated inputs; no panic, unbounded al
 
 Compare against:
 - Identity (no compression)
-- Simple RLE
+- Simple framed pair-RLE
 - LZ4
 - Zstandard
 - Brotli
 
-Use public corpora and legally distributable samples: Canterbury, Silesia, Calgary, enwik8 where licensing permits, synthetic periodic data, repeated records, JSON, CSV, source code, images, audio, and encrypted/random data.
+The CI smoke-test harness currently uses five deterministic synthetic inputs, each 16 KiB. It includes all emitted framing bytes for pair-RLE, NARF, and size-prepended LZ4, and records complete Zstandard and Brotli streams. Identity is raw input without a wrapper because it is a lower-bound reference when the caller already knows the input length.
 
-Report total bytes including every header and metadata field.
+Report total bytes including every header and metadata field. Record compiler, runner, kernel, and CPU metadata with each CI artifact. See [BENCHMARK_METHODOLOGY.md](BENCHMARK_METHODOLOGY.md) for current settings, dataset limitations, and percentile definitions.
+
+Use public corpora and legally distributable samples: Canterbury, Silesia, Calgary, enwik8 where licensing permits, synthetic periodic data, repeated records, JSON, CSV, source code, images, audio, and encrypted/random data. Record dataset version, checksum, license, and preprocessing before publishing results.
 
 ## Phase 2 — Performance
 
@@ -39,7 +41,7 @@ Measure:
 - CPU cycles per input byte;
 - energy per GiB where hardware measurement is available.
 
-Run at least 30 repetitions after warm-up, publish raw measurements, and avoid comparing unlike hardware or compiler settings.
+Run at least 30 repetitions after warm-up, publish raw measurements, and avoid comparing unlike hardware or compiler settings. For stable tail-latency claims, use substantially larger samples and report uncertainty.
 
 ## Phase 3 — Mathematical characterization
 
@@ -55,7 +57,7 @@ Targets:
 - iOS ARM64
 - WebAssembly/WASI
 
-Require byte-for-byte conformance vectors on every target.
+Require byte-for-byte conformance vectors on every target. Cross-compilation alone is not runtime conformance evidence.
 
 ## Phase 5 — Security research
 
@@ -64,9 +66,11 @@ NARF is not cryptography. Test parser robustness and side-channel behavior as en
 ## Phase 6 — Release gates
 
 No production release until:
-- a stable format version is frozen;
+- a stable interoperable format version is frozen;
 - independent implementations pass conformance tests;
-- fuzzing and security review are published;
-- benchmark claims are independently reproducible;
+- fuzzing and external security review are published where security claims are made;
+- benchmark claims are independently reproducible on representative data;
+- broad platform CI and runtime validation are complete;
 - all known limitations are documented;
-- a license, governance process, and vulnerability disclosure policy exist.
+- a license, governance process, and vulnerability disclosure policy exist;
+- operational documentation is complete.
