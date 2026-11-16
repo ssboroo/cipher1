@@ -152,8 +152,8 @@ fn report_codec<E, D>(
     E: FnMut(&[u8]) -> Vec<u8>,
     D: FnMut(&[u8]) -> Vec<u8>,
 {
-    assert_eq!(encode_operation(input), encoded, "{codec} output is not deterministic");
-    assert_eq!(decode_operation(encoded), input, "{codec} round trip failed");
+    assert_eq!(encode_operation(input).as_slice(), encoded, "{codec} output is not deterministic");
+    assert_eq!(decode_operation(encoded).as_slice(), input, "{codec} round trip failed");
 
     let encode = measure(input.len(), || encode_operation(input));
     let decode = measure(input.len(), || decode_operation(encoded));
