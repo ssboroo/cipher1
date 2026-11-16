@@ -69,9 +69,21 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Record benchmark environment
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p target
+          {
+            echo "# rustc=$(rustc --version)"
+            echo "# cargo=$(cargo --version)"
+            echo "# runner=$RUNNER_OS/$RUNNER_ARCH"
+            echo "# kernel=$(uname -srmo)"
+            echo "# cpu=$(awk -F: '/model name/ {gsub(/^[ \\t]+/, \"\", $2); print $2; exit}' /proc/cpuinfo)"
+          } > target/narf-baseline.csv
+
       - name: Run NARF baseline benchmark
         if: runner.os == 'Linux'
-        run: cargo bench -p nexus-transform --bench narf_baseline | tee target/narf-baseline.csv
+        run: cargo bench -p nexus-transform --bench narf_baseline | tee -a target/narf-baseline.csv
 
       - name: Archive benchmark CSV
         if: runner.os == 'Linux'
