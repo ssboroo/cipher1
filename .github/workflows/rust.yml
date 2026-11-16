@@ -79,16 +79,18 @@ jobs:
             echo "# runner=$RUNNER_OS/$RUNNER_ARCH"
             echo "# kernel=$(uname -srmo)"
             echo "# cpu=$(awk -F: '/model name/ {gsub(/^[[:space:]]+/, \"\", $2); print $2; exit}' /proc/cpuinfo)"
-          } > target/narf-baseline.csv
+          } > target/narf-baseline-metadata.txt
 
       - name: Run NARF baseline benchmark
         if: runner.os == 'Linux'
-        run: cargo bench -p nexus-transform --bench narf_baseline | tee -a target/narf-baseline.csv
+        run: cargo bench -p nexus-transform --bench narf_baseline | tee target/narf-baseline.csv
 
       - name: Archive benchmark CSV
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: narf-baseline-${{ github.sha }}
-          path: target/narf-baseline.csv
+          path: |
+            target/narf-baseline.csv
+            target/narf-baseline-metadata.txt
           if-no-files-found: error
