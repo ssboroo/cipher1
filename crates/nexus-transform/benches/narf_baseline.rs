@@ -173,12 +173,6 @@ fn report_codec<E, D>(
 }
 
 fn main() {
-    println!("# benchmark_schema=2");
-    println!("# architecture={}", std::env::consts::ARCH);
-    println!("# operating_system={}", std::env::consts::OS);
-    println!("# input_bytes_per_dataset={INPUT_LEN}");
-    println!("# warmup_iterations={WARMUP}");
-    println!("# measured_iterations={ITERATIONS}");
     println!(
         "dataset,codec,input_bytes,encoded_bytes,total_ratio,encode_p50_ns_per_byte,encode_p95_ns_per_byte,encode_p99_ns_per_byte,decode_p50_ns_per_byte,decode_p95_ns_per_byte,decode_p99_ns_per_byte"
     );
