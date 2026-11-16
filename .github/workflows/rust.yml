@@ -78,7 +78,7 @@ jobs:
             echo "# cargo=$(cargo --version)"
             echo "# runner=$RUNNER_OS/$RUNNER_ARCH"
             echo "# kernel=$(uname -srmo)"
-            echo "# cpu=$(awk -F: '/model name/ {gsub(/^[ \\t]+/, \"\", $2); print $2; exit}' /proc/cpuinfo)"
+            echo "# cpu=$(awk -F: '/model name/ {gsub(/^[[:space:]]+/, \"\", $2); print $2; exit}' /proc/cpuinfo)"
           } > target/narf-baseline.csv
 
       - name: Run NARF baseline benchmark
