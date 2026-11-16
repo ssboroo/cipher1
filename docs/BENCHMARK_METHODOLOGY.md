@@ -35,7 +35,7 @@ Each dataset/codec/operation pair receives five warm-up calls followed by 30 ind
 
 Percentiles use the nearest-rank definition. With 30 samples, p99 is the maximum observed sample; it should not be interpreted as a stable tail-latency estimate. The benchmark reports p50, p95, and p99 to make the sample distribution visible, not to imply statistical confidence.
 
-The CI artifact records the Rust and Cargo versions, runner OS and architecture, kernel string, and CPU model when available. The benchmark executable also records its compile-time OS and architecture.
+The CI artifact contains a strict CSV file plus a separate metadata text file with Rust and Cargo versions, runner OS and architecture, kernel string, and CPU model when available. The benchmark executable does not mix metadata comments into the CSV.
 
 ## Limitations and interpretation
 
