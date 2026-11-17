@@ -32,6 +32,8 @@ pub enum TransformError {
     AllocationFailed,
     #[error("run-length stream is malformed")]
     InvalidRunStream,
+    #[error("version-3 token stream is not canonical")]
+    NonCanonicalEncoding,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -166,11 +168,15 @@ pub fn decode_with_limits(
         return Err(TransformError::InvalidParameters);
     }
     let residual_count = output_len.saturating_sub(2);
+    let body = &input[HEADER_LEN..];
     let residuals = if version == VERSION {
-        unpack_runs_v3(&input[HEADER_LEN..], residual_count)?
+        unpack_runs_v3(body, residual_count)?
     } else {
-        unpack_runs(&input[HEADER_LEN..], residual_count)?
+        unpack_runs(body, residual_count)?
     };
+    if version == VERSION && !is_canonical_v3(body, &residuals) {
+        return Err(TransformError::NonCanonicalEncoding);
+    }
     let mut output = try_vec_with_capacity(output_len)?;
 
     if output_len >= 1 {
@@ -435,6 +441,101 @@ fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformErr
     Ok(out)
 }
 
+/// Check the deterministic version-3 token segmentation without allocating.
+///
+/// Canonicality is evaluated for the residual sequence selected by the frame's
+/// alpha and beta values. It does not verify that those coefficients are the
+/// globally optimal pair chosen by the encoder.
+fn is_canonical_v3(encoded: &[u8], residuals: &[u8]) -> bool {
+    let mut encoded_index = 0usize;
+    let mut residual_index = 0usize;
+
+    while residual_index < residuals.len() {
+        let value = residuals[residual_index];
+        let mut run = 1usize;
+        while residual_index + run < residuals.len()
+            && residuals[residual_index + run] == value
+        {
+            run += 1;
+        }
+
+        if run >= 128 {
+            if !consume_expected_byte(encoded, &mut encoded_index, 0xff) {
+                return false;
+            }
+            let mut remaining = run;
+            loop {
+                let mut byte = (remaining & 0x7f) as u8;
+                remaining >>= 7;
+                if remaining != 0 {
+                    byte |= 0x80;
+                }
+                if !consume_expected_byte(encoded, &mut encoded_index, byte) {
+                    return false;
+                }
+                if remaining == 0 {
+                    break;
+                }
+            }
+            if !consume_expected_byte(encoded, &mut encoded_index, value) {
+                return false;
+            }
+            residual_index += run;
+        } else if run >= 3 {
+            let control = 0x80 | ((run - 1) as u8);
+            if !consume_expected_byte(encoded, &mut encoded_index, control)
+                || !consume_expected_byte(encoded, &mut encoded_index, value)
+            {
+                return false;
+            }
+            residual_index += run;
+        } else {
+            let start = residual_index;
+            while residual_index < residuals.len() && residual_index - start < 128 {
+                let next_value = residuals[residual_index];
+                let mut next_run = 1usize;
+                while next_run < 3
+                    && residual_index + next_run < residuals.len()
+                    && residuals[residual_index + next_run] == next_value
+                {
+                    next_run += 1;
+                }
+                if next_run >= 3 {
+                    break;
+                }
+                residual_index += next_run.min(128 - (residual_index - start));
+            }
+
+            let count = residual_index - start;
+            if count == 0
+                || !consume_expected_byte(encoded, &mut encoded_index, (count - 1) as u8)
+            {
+                return false;
+            }
+            let Some(end) = encoded_index.checked_add(count) else {
+                return false;
+            };
+            let Some(actual) = encoded.get(encoded_index..end) else {
+                return false;
+            };
+            if actual != &residuals[start..residual_index] {
+                return false;
+            }
+            encoded_index = end;
+        }
+    }
+
+    encoded_index == encoded.len()
+}
+
+fn consume_expected_byte(encoded: &[u8], cursor: &mut usize, expected: u8) -> bool {
+    if encoded.get(*cursor).copied() != Some(expected) {
+        return false;
+    }
+    *cursor += 1;
+    true
+}
+
 #[cfg(test)]
 fn run_length(input: &[u8], start: usize) -> usize {
     let mut end = start + 1;
@@ -474,6 +575,18 @@ fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn frame_with_tokens(version: u8, residual_count: usize, tokens: &[u8]) -> Vec<u8> {
+        let original_len = residual_count + 2;
+        let mut frame = Vec::with_capacity(HEADER_LEN + tokens.len());
+        frame.extend_from_slice(MAGIC);
+        frame.push(version);
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&(original_len as u64).to_be_bytes());
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(tokens);
+        frame
+    }
 
     #[test]
     fn round_trip_empty_and_short_inputs() {
@@ -709,6 +822,62 @@ mod tests {
         overlong[18] = 0x81;
         overlong[19] = 0x00;
         assert_eq!(decode(&overlong), Err(TransformError::InvalidRunStream));
+    }
+
+    #[test]
+    fn version_three_accepts_canonical_literal_and_repeat_tokens() {
+        let literal = frame_with_tokens(VERSION, 4, &[0x03, 1, 2, 3, 4]);
+        assert_eq!(decode(&literal).unwrap(), [0, 0, 1, 2, 3, 4]);
+
+        let short_run = frame_with_tokens(VERSION, 3, &[0x82, 0x41]);
+        assert_eq!(decode(&short_run).unwrap(), [0, 0, 0x41, 0x41, 0x41]);
+
+        let long_run = frame_with_tokens(VERSION, 130, &[0xff, 0x82, 0x01, 0x41]);
+        assert_eq!(decode(&long_run).unwrap(), [vec![0, 0], vec![0x41; 130]].concat());
+    }
+
+    #[test]
+    fn version_three_rejects_noncanonical_token_segmentations() {
+        let cases = [
+            (
+                vec![1, 2, 3, 4],
+                vec![0x01, 1, 2, 0x01, 3, 4],
+            ),
+            (
+                vec![0x41; 3],
+                vec![0x02, 0x41, 0x41, 0x41],
+            ),
+            (
+                vec![0x41; 130],
+                vec![0xfe, 0x41, 0x82, 0x41],
+            ),
+            (
+                vec![0x10, 0x41, 0x41, 0x41, 0x41],
+                vec![0x01, 0x10, 0x41, 0x82, 0x41],
+            ),
+            (
+                vec![0x41; 131],
+                vec![0xff, 0x80, 0x01, 0x41, 0x82, 0x41],
+            ),
+        ];
+
+        for (residuals, tokens) in cases {
+            let frame = frame_with_tokens(VERSION, residuals.len(), &tokens);
+            assert_eq!(
+                decode(&frame),
+                Err(TransformError::NonCanonicalEncoding),
+                "tokens={tokens:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_versions_keep_accepting_noncanonical_literal_segmentation() {
+        let tokens = [0x01, 1, 2, 0x01, 3, 4];
+        for version in [LEGACY_VERSION, LEGACY_VERSION_2] {
+            let frame = frame_with_tokens(version, 4, &tokens);
+            assert_eq!(decode(&frame).unwrap(), [0, 0, 1, 2, 3, 4]);
+        }
     }
 
     #[test]
