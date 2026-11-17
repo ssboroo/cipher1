@@ -1,6 +1,6 @@
 # CIPHER-1 NEXUS Research Status
 
-Last updated: 2026-11-16
+Last updated: 2026-11-17
 
 ## Executive status
 
@@ -33,6 +33,8 @@ cryptographic algorithm.
 - Version 3 adaptive second-order residual transform over Z/256Z.
 - Searches 64 coefficient pairs and uses deterministic tie-breaking.
 - Extended unsigned-LEB128 repeat tokens for long runs.
+- Version-3 decoding validates the canonical left-to-right token segmentation without allocating a second token buffer.
+- Token canonicality is relative to the frame's coefficient pair; the decoder does not independently verify global coefficient optimality.
 - Raw fallback bounds format expansion to at most the 17-byte frame header.
 - Version-3 decoder retains version-1 and version-2 read compatibility.
 - Fixed-coefficient transform bijectivity is established by a lower-triangular
@@ -73,11 +75,14 @@ cryptographic algorithm.
 
 ## Current review findings
 
-- NARF v3 encoding is deterministic, but the decoder accepts more than one
-  valid token segmentation for some residual sequences. Canonical
-  unsigned-LEB128 lengths are enforced; whole-stream token canonicality is
-  not currently a decoder requirement. Any strict-canonical mode requires an
-  explicit compatibility decision and conformance tests.
+- Main-branch NARF v3 currently accepts more than one valid token segmentation
+  for some residual sequences. The proposal on
+  research/narf-v3-canonical-token-stream adds byte-for-byte canonical token
+  validation for v3 and explicit accepted/rejected vectors. It preserves
+  version-1 and version-2 acceptance. CI and review are pending; the proposal
+  is not merged.
+- Canonical token validation is relative to the supplied coefficient pair. It
+  does not prove that the pair is the globally optimal selector result.
 - Fallible reservation does not guarantee process liveness under OS memory
   overcommit or physical-memory exhaustion.
 - The benchmark-only pair-RLE decoder is for trusted harness data, not an
@@ -97,8 +102,8 @@ cryptographic algorithm.
 
 ## Next engineering priorities
 
-1. Establish NARF token canonicality with explicit accepted/rejected vectors and
-   a backward-compatibility decision.
+1. Validate and review the proposed NARF v3 canonical-token rule, including
+   CI/fuzz evidence and the documented v1/v2 compatibility boundary.
 2. Expand the benchmark to versioned public corpora with recorded licenses,
    checksums, and preprocessing; repeat measurements on comparable hardware.
 3. Add stable cross-language conformance vectors for C1NX, C1AE, and NARF.
