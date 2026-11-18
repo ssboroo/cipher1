@@ -26,6 +26,20 @@ The experiment manifest must record:
 
 Candidate sources for evaluation include Canterbury, Calgary, and Silesia. Their availability does not imply permission to redistribute their contents. Confirm the applicable terms for each dataset release before use. Additional real-world corpora should be added only with documented provenance and licensing.
 
+## Initial candidate source screening (2026-11-18)
+
+This is a provenance and licensing screen, not legal advice and not a grant of permission. The reviewed pages establish benchmark purpose and file provenance, but they do not establish a blanket redistribution license for any of the three candidate corpora.
+
+| Candidate | Evidence reviewed | Admission decision |
+|---|---|---|
+| Canterbury | The [official corpus site](https://www.corpus.canterbury.ac.nz/) describes it as a lossless-compression research benchmark. The reviewed landing page did not expose a corpus-wide license or complete per-file rights statement. | Not yet admitted. Obtain and review the exact release's README/terms and the rights for each included source file. |
+| Calgary | The [corpus reference page](https://www.data-compression.info/Corpora/CalgaryCorpus/) describes the 18-file collection and links to a University of Calgary FTP source. The page's own copyright notice is not a license for the corpus contents. No corpus-wide redistribution grant was verified in the reviewed material. | Not yet admitted. Retrieve the exact archive's accompanying README/index and review component-level rights; do not infer rights from the FTP location. |
+| Silesia | The [original author's corpus page](https://sun.aei.polsl.pl/~sdeor/index.php?page=silesia) identifies 12 files and their different sources, including Project Gutenberg, Mozilla, a hospital image, NCI, OpenOffice, OSDB, the Virtual Library of Polish Literature, Samba, Harvard astronomical catalogs, and XMLPPM. The reviewed page provides provenance and MD5 identifiers but no blanket corpus redistribution license. | Not yet admitted. Review the rights for every component and the exact archive. A single corpus-level assumption is insufficient. |
+
+The Silesia source page reports a 12-file corpus totaling 211,938,580 bytes and explicitly describes heterogeneous source material. That makes it a useful candidate for a later large-file experiment, but also makes per-file rights review essential. Its published MD5 values are historical identifiers only; generate SHA-256 checksums locally for the experiment manifest.
+
+The first implementation should therefore accept user-supplied corpus directories and manifests without downloading or redistributing corpus bytes. A corpus may be used in a published experiment only after its exact release and component-level terms have been recorded. If the rights remain unclear, exclude that file and document the exclusion; do not silently substitute another copy.
+
 ## File selection and reproducibility
 
 1. Pin a specific corpus release or immutable source snapshot. A moving download URL is not a version.
