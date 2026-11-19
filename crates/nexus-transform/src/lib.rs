@@ -967,4 +967,130 @@ mod tests {
             assert_eq!(unpack_runs(&pack_runs(&repeated), len).unwrap(), repeated);
         }
     }
+    #[test]
+    fn canonical_tokenization_matches_exhaustive_small_residuals() {
+        // Exhaustively enumerate all sequences over a four-byte alphabet up to
+        // length eight. The all-literal representation is always parseable;
+        // canonicality must accept it exactly when it matches the encoder.
+        for len in 0..=8 {
+            for mut word in 0..4usize.pow(len as u32) {
+                let mut residuals = vec![0u8; len];
+                for value in &mut residuals {
+                    *value = (word & 0x03) as u8;
+                    word >>= 2;
+                }
+
+                let mut source = vec![0, 0];
+                source.extend_from_slice(&residuals);
+                let canonical = pack_residuals_v3(&source, 0, 0);
+                assert!(
+                    is_canonical_v3(&canonical, &residuals),
+                    "encoder output rejected for residuals={residuals:?}"
+                );
+
+                let mut all_literals = Vec::new();
+                for chunk in residuals.chunks(128) {
+                    all_literals.push((chunk.len() - 1) as u8);
+                    all_literals.extend_from_slice(chunk);
+                }
+                assert_eq!(
+                    unpack_runs_v3(&all_literals, residuals.len()).unwrap(),
+                    residuals
+                );
+                assert_eq!(
+                    is_canonical_v3(&all_literals, &residuals),
+                    all_literals == canonical,
+                    "alternate literal segmentation result for residuals={residuals:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn canonical_tokenization_handles_run_and_literal_boundaries() {
+        for run_len in [1usize, 2, 3, 126, 127, 128, 129, 255, 256, 257, 16_384] {
+            let mut residuals = vec![0x11, 0x22];
+            residuals.extend(std::iter::repeat_n(0x41, run_len));
+            residuals.extend_from_slice(&[0x33, 0x44]);
+
+            let mut source = vec![0, 0];
+            source.extend_from_slice(&residuals);
+            let canonical = pack_residuals_v3(&source, 0, 0);
+            assert!(is_canonical_v3(&canonical, &residuals));
+            assert_eq!(
+                unpack_runs_v3(&canonical, residuals.len()).unwrap(),
+                residuals
+            );
+
+            let mut all_literals = Vec::new();
+            for chunk in residuals.chunks(128) {
+                all_literals.push((chunk.len() - 1) as u8);
+                all_literals.extend_from_slice(chunk);
+            }
+            assert_eq!(
+                unpack_runs_v3(&all_literals, residuals.len()).unwrap(),
+                residuals
+            );
+            assert_eq!(
+                is_canonical_v3(&all_literals, &residuals),
+                all_literals == canonical
+            );
+
+            if run_len >= 3 {
+                assert_ne!(all_literals, canonical);
+                assert!(!is_canonical_v3(&all_literals, &residuals));
+            }
+        }
+
+        // A two-byte equal group crossing a 128-byte literal boundary must be
+        // split between the adjacent canonical literal tokens.
+        let mut boundary = (0..130).map(|i| i as u8).collect::<Vec<_>>();
+        boundary[126] = 0xed;
+        boundary[127] = 0xee;
+        boundary[128] = 0xee;
+        boundary[129] = 0xef;
+        let mut source = vec![0, 0];
+        source.extend_from_slice(&boundary);
+        let canonical = pack_residuals_v3(&source, 0, 0);
+        assert!(is_canonical_v3(&canonical, &boundary));
+        assert_eq!(unpack_runs_v3(&canonical, boundary.len()).unwrap(), boundary);
+    }
+
+    #[test]
+    fn canonical_tokenization_rejects_split_extended_repeat() {
+        let residuals = vec![0x41; 257];
+        let mut source = vec![0, 0];
+        source.extend_from_slice(&residuals);
+        let canonical = pack_residuals_v3(&source, 0, 0);
+        assert!(is_canonical_v3(&canonical, &residuals));
+
+        // Three valid short-repeat tokens decode to the same bytes, but v3
+        // requires one extended-repeat token for this maximal run.
+        let alternate = [0xfe, 0x41, 0xfe, 0x41, 0x82, 0x41];
+        assert_eq!(
+            unpack_runs_v3(&alternate, residuals.len()).unwrap(),
+            residuals
+        );
+        assert!(!is_canonical_v3(&alternate, &residuals));
+    }
+
+    #[test]
+    fn canonical_tokenization_rejects_split_literal() {
+        let residuals = (0..129).map(|i| (i % 2) as u8).collect::<Vec<_>>();
+        let mut source = vec![0, 0];
+        source.extend_from_slice(&residuals);
+        let canonical = pack_residuals_v3(&source, 0, 0);
+        assert!(is_canonical_v3(&canonical, &residuals));
+
+        let mut alternate = vec![63];
+        alternate.extend_from_slice(&residuals[..64]);
+        alternate.push(64);
+        alternate.extend_from_slice(&residuals[64..]);
+        assert_eq!(
+            unpack_runs_v3(&alternate, residuals.len()).unwrap(),
+            residuals
+        );
+        assert!(!is_canonical_v3(&alternate, &residuals));
+    }
+
 }
