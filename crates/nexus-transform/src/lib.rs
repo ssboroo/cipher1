@@ -1093,4 +1093,101 @@ mod tests {
         assert!(!is_canonical_v3(&alternate, &residuals));
     }
 
+
+    #[test]
+    fn token_size_estimator_matches_materialized_stream_for_all_candidates() {
+        let lengths = [
+            0usize, 1, 2, 3, 4, 126, 127, 128, 129, 130, 254, 255, 256, 257, 1024,
+            4096, 16_384,
+        ];
+        let mut inputs = Vec::new();
+
+        for len in lengths {
+            inputs.push(vec![0x5a; len]);
+            inputs.push((0..len).map(|i| i as u8).collect::<Vec<_>>());
+            inputs.push((0..len).map(|i| (i % 5) as u8).collect::<Vec<_>>());
+
+            let mut state = 0x9e37_79b9_u32 ^ len as u32;
+            inputs.push(
+                (0..len)
+                    .map(|_| {
+                        state ^= state << 13;
+                        state ^= state >> 17;
+                        state ^= state << 5;
+                        state as u8
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        for (input_index, input) in inputs.iter().enumerate() {
+            for &alpha in &CANDIDATES {
+                for &beta in &CANDIDATES {
+                    let estimated = residual_token_len(input, alpha, beta);
+                    let materialized = pack_residuals_v3(input, alpha, beta);
+                    assert_eq!(
+                        estimated,
+                        materialized.len(),
+                        "input_index={input_index}, input_len={}, alpha={alpha}, beta={beta}",
+                        input.len()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn selector_uses_minimum_materialized_cost_and_lexicographic_tie_break() {
+        let mut inputs = vec![Vec::new(), vec![0x42], vec![0x42, 0x17]];
+        for len in [3usize, 127, 128, 129, 255, 256, 257, 1024, 4096] {
+            inputs.push(vec![0x41; len]);
+            inputs.push((0..len).map(|i| (i % 7) as u8).collect());
+            inputs.push((0..len).map(|i| i as u8).collect());
+        }
+
+        for (input_index, input) in inputs.iter().enumerate() {
+            let mut best: Option<(usize, u8, u8)> = None;
+            for &alpha in &CANDIDATES {
+                for &beta in &CANDIDATES {
+                    let cost = pack_residuals_v3(input, alpha, beta).len();
+                    let replace = best
+                        .as_ref()
+                        .is_none_or(|(best_cost, best_alpha, best_beta)| {
+                            cost < *best_cost
+                                || (cost == *best_cost && (alpha, beta) < (*best_alpha, *best_beta))
+                        });
+                    if replace {
+                        best = Some((cost, alpha, beta));
+                    }
+                }
+            }
+
+            let (best_cost, best_alpha, best_beta) =
+                best.expect("the candidate set is non-empty");
+            let encoded = encode(input);
+            if best_cost >= input.len() {
+                assert_eq!(
+                    &encoded[5..7],
+                    &[RAW_MODE, RAW_MODE],
+                    "raw fallback mismatch for input_index={input_index}, input_len={}",
+                    input.len()
+                );
+                assert_eq!(&encoded[HEADER_LEN..], input.as_slice());
+            } else {
+                assert_eq!(
+                    (encoded[5], encoded[6]),
+                    (best_alpha, best_beta),
+                    "selector mismatch for input_index={input_index}, input_len={}",
+                    input.len()
+                );
+                assert_eq!(encoded.len(), HEADER_LEN + best_cost);
+                assert_eq!(
+                    &encoded[HEADER_LEN..],
+                    pack_residuals_v3(input, best_alpha, best_beta).as_slice()
+                );
+            }
+            assert_eq!(decode(&encoded).unwrap(), *input);
+        }
+    }
+
 }
