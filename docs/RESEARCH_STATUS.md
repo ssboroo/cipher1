@@ -1,6 +1,6 @@
 # CIPHER-1 NEXUS Research Status
 
-Last updated: 2026-11-17
+Last updated: 2026-11-21
 
 ## Executive status
 
@@ -39,8 +39,9 @@ cryptographic algorithm.
 - Version-3 decoder retains version-1 and version-2 read compatibility.
 - Fixed-coefficient transform bijectivity is established by a lower-triangular
   matrix argument with unit diagonal.
-- Decoder-owned output and residual buffers use fallible capacity reservations;
-  allocation reservation failures map to `AllocationFailed`.
+- Decoder token buffers reserve the final output capacity and reconstruct
+  residuals in place, avoiding a second output-sized allocation. Reservations
+  remain fallible and failures map to `AllocationFailed`.
 - The caller-controlled output limit remains the primary resource policy.
 - The recurrence family and token coding are engineering hypotheses, not a
   demonstrated novel compression method or a cryptographic primitive.
