@@ -169,32 +169,74 @@ pub fn decode_with_limits(
     }
     let residual_count = output_len.saturating_sub(2);
     let body = &input[HEADER_LEN..];
-    let residuals = if version == VERSION {
-        unpack_runs_v3(body, residual_count)?
+    // Reserve the final output capacity while decoding residuals so the
+    // reconstruction below can reuse this allocation without a second
+    // output-sized buffer.
+    let mut residuals = if version == VERSION {
+        unpack_runs_v3_with_capacity(body, residual_count, output_len)?
     } else {
-        unpack_runs(body, residual_count)?
+        unpack_runs_with_capacity(body, residual_count, output_len)?
     };
     if version == VERSION && !is_canonical_v3(body, &residuals) {
         return Err(TransformError::NonCanonicalEncoding);
     }
-    let mut output = try_vec_with_capacity(output_len)?;
+    reconstruct_residuals_in_place(
+        &mut residuals,
+        output_len,
+        seed0,
+        seed1,
+        alpha,
+        beta,
+    )?;
+    Ok(residuals)
+}
 
-    if output_len >= 1 {
-        output.push(seed0);
+/// Reconstruct the original bytes in the residual buffer's existing allocation.
+/// The caller reserves at least `output_len` capacity while decoding.
+fn reconstruct_residuals_in_place(
+    residuals: &mut Vec<u8>,
+    output_len: usize,
+    seed0: u8,
+    seed1: u8,
+    alpha: u8,
+    beta: u8,
+) -> Result<(), TransformError> {
+    let expected_residuals = output_len.saturating_sub(2);
+    if residuals.len() != expected_residuals {
+        return Err(TransformError::InvalidRunStream);
     }
+
+    if residuals.capacity() < output_len {
+        let additional = output_len
+            .checked_sub(residuals.len())
+            .ok_or(TransformError::InvalidLength)?;
+        residuals
+            .try_reserve_exact(additional)
+            .map_err(|_| TransformError::AllocationFailed)?;
+    }
+
+    residuals.resize(output_len, 0);
+    if output_len == 0 {
+        return Ok(());
+    }
+
     if output_len >= 2 {
-        output.push(seed1);
+        residuals.copy_within(0..expected_residuals, 2);
+        residuals[1] = seed1;
     }
-    for residual in residuals {
-        let i = output.len();
-        let previous = output[i - 1] as u16;
-        let previous2 = output[i - 2] as u16;
-        let value = (residual as u16
+    residuals[0] = seed0;
+
+    for i in 2..output_len {
+        let residual = residuals[i] as u16;
+        let previous = residuals[i - 1] as u16;
+        let previous2 = residuals[i - 2] as u16;
+        let value = (residual
             + (alpha as u16 * previous)
-            + (beta as u16 * previous2)) & 0xff;
-        output.push(value as u8);
+            + (beta as u16 * previous2))
+            & 0xff;
+        residuals[i] = value as u8;
     }
-    Ok(output)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -397,7 +439,15 @@ fn read_uleb128(input: &[u8], start: usize) -> Result<(usize, usize), TransformE
 }
 
 fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
-    let mut out = try_vec_with_capacity(expected)?;
+    unpack_runs_v3_with_capacity(input, expected, expected)
+}
+
+fn unpack_runs_v3_with_capacity(
+    input: &[u8],
+    expected: usize,
+    capacity: usize,
+) -> Result<Vec<u8>, TransformError> {
+    let mut out = try_vec_with_capacity(capacity.max(expected))?;
     let mut i = 0usize;
     while i < input.len() {
         let control = input[i];
@@ -546,7 +596,15 @@ fn run_length(input: &[u8], start: usize) -> usize {
 }
 
 fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
-    let mut out = try_vec_with_capacity(expected)?;
+    unpack_runs_with_capacity(input, expected, expected)
+}
+
+fn unpack_runs_with_capacity(
+    input: &[u8],
+    expected: usize,
+    capacity: usize,
+) -> Result<Vec<u8>, TransformError> {
+    let mut out = try_vec_with_capacity(capacity.max(expected))?;
     let mut i = 0;
     while i < input.len() {
         let control = input[i];
@@ -586,6 +644,67 @@ mod tests {
         frame.extend_from_slice(&[0, 0]);
         frame.extend_from_slice(tokens);
         frame
+    }
+
+    #[test]
+    fn decoder_reconstructs_in_the_preallocated_residual_buffer() {
+        let lengths = [0usize, 1, 2, 3, 4, 127, 128, 129, 255, 256, 257, 1024];
+        for version in [LEGACY_VERSION, LEGACY_VERSION_2, VERSION] {
+            for &alpha in &CANDIDATES {
+                for &beta in &CANDIDATES {
+                    for &len in &lengths {
+                        let input: Vec<u8> = (0..len)
+                            .map(|i| ((i * 73 + i * i * 19 + 11) & 0xff) as u8)
+                            .collect();
+                        let residuals = forward_residual(&input, alpha, beta);
+                        let tokens = if version == VERSION {
+                            pack_residuals_v3(&input, alpha, beta)
+                        } else {
+                            pack_runs(&residuals)
+                        };
+                        let mut decoded_residuals = if version == VERSION {
+                            unpack_runs_v3_with_capacity(
+                                &tokens,
+                                residuals.len(),
+                                input.len(),
+                            )
+                            .unwrap()
+                        } else {
+                            unpack_runs_with_capacity(
+                                &tokens,
+                                residuals.len(),
+                                input.len(),
+                            )
+                            .unwrap()
+                        };
+                        assert!(
+                            decoded_residuals.capacity() >= input.len(),
+                            "version={version}, len={len}"
+                        );
+                        let allocation = decoded_residuals.as_ptr();
+                        reconstruct_residuals_in_place(
+                            &mut decoded_residuals,
+                            input.len(),
+                            input.first().copied().unwrap_or(0),
+                            input.get(1).copied().unwrap_or(0),
+                            alpha,
+                            beta,
+                        )
+                        .unwrap();
+                        assert_eq!(
+                            decoded_residuals.as_ptr(),
+                            allocation,
+                            "reconstruction reallocated: version={version}, len={len}"
+                        );
+                        assert_eq!(
+                            decoded_residuals,
+                            input,
+                            "round trip mismatch: version={version}, alpha={alpha}, beta={beta}, len={len}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]
