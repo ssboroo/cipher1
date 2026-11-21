@@ -43,6 +43,8 @@ Version 3 uses an extended grammar:
 - Controls `0x80..0xfe` encode 1..127 repeated bytes followed by the repeated byte. The encoder uses these for runs of 3..127.
 - Control `0xff` introduces an extended repeat: an unsigned LEB128 run length of at least 128, followed by the repeated byte.
 - The encoder uses extended repeats for runs of 128 or more, avoiding repeated 128-byte tokens on long constant residual sequences.
+- Version 3 has one canonical token segmentation for a given residual sequence. Scan left to right: encode each maximal run of 128 or more equal bytes as one extended repeat; encode each maximal run of 3..127 equal bytes as one short repeat; otherwise collect a literal of up to 128 bytes, stopping before the next position that begins a run of at least three. If a two-byte group straddles a 128-byte literal boundary, only the byte that fits is included in that literal.
+- After parsing a version-3 body, the decoder reconstructs the canonical token sequence from the decoded residuals and compares it byte-for-byte with the supplied body. It rejects alternate token segmentations with NonCanonicalEncoding. This check is relative to the header's alpha/beta coefficients; it does not prove that the coefficient pair is the globally optimal pair selected by the encoder.
 - The decoder rejects non-canonical/overflowing LEB128 lengths, extended lengths below 128, truncated tokens, output overflow, and a final decoded residual length that differs from original_length - min(original_length, 2).
 
 ## 5. Selection
@@ -54,17 +56,20 @@ Evaluate all 64 coefficient pairs. For the transformed representation, cost equa
 - Validate magic and version before allocation.
 - Accept versions 1, 2, and 3; raw mode is valid only in versions 2 and 3.
 - Parse version-3 extended repeat lengths as canonical unsigned LEB128 values.
+- Require version-3 token bodies to use the canonical left-to-right segmentation defined in Section 4; return NonCanonicalEncoding for alternate segmentations.
+- Preserve the legacy version-1 and version-2 token acceptance rules; strict token canonicality applies only to version 3.
 - For raw mode, require both coefficients to equal `0xff`, both seed bytes to be zero, and body length to equal the declared output length.
 - Parse length with checked conversion to the platform size.
 - Enforce caller-supplied maximum output size.
-- Use fallible capacity reservation for every decoder-owned output buffer and return a defined allocation error if reservation fails; do not use infallible capacity constructors for untrusted declared lengths.
+- Use fallible capacity reservation for decoder-owned buffers and return a defined allocation error if reservation fails; do not use infallible capacity constructors for untrusted declared lengths.
+- Reserve the final output capacity in the decoded residual buffer, then reconstruct in place after token validation. Do not allocate a second output-sized buffer for residual-to-output reconstruction.
 - Check token boundaries and output growth with checked arithmetic.
 - Reconstruct using the recurrence in modulo-256 arithmetic.
 - Reject malformed or trailing token bytes that do not produce exactly the declared residual count.
 
 ## 7. Compatibility
 
-Versions 1, 2, and 3 are experimental and may change before a stable format is declared. Version-3 writers are not readable by version-1- or version-2-only decoders. Version-3 decoders retain read compatibility with valid version-1 and version-2 streams. A future stable format requires a published specification, conformance vectors, fuzzing corpus, and independent implementation.
+Versions 1, 2, and 3 are experimental and may change before a stable format is declared. Version-3 writers are not readable by version-1- or version-2-only decoders. Version-3 decoders retain read compatibility with valid version-1 and version-2 streams. Version-3 decoders reject non-canonical token segmentations that earlier experimental decoders may have accepted; the repository encoder has always emitted the canonical segmentation. Legacy version-1 and version-2 acceptance is unchanged. A future stable format requires a published specification, conformance vectors, fuzzing corpus, and independent implementation.
 
 ## 8. Security
 
