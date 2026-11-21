@@ -438,6 +438,7 @@ fn read_uleb128(input: &[u8], start: usize) -> Result<(usize, usize), TransformE
     Err(TransformError::InvalidRunStream)
 }
 
+#[cfg(test)]
 fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
     unpack_runs_v3_with_capacity(input, expected, expected)
 }
@@ -595,6 +596,7 @@ fn run_length(input: &[u8], start: usize) -> usize {
     end - start
 }
 
+#[cfg(test)]
 fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
     unpack_runs_with_capacity(input, expected, expected)
 }
