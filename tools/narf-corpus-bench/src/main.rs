@@ -25,7 +25,7 @@ const DEFAULT_SAMPLES: usize = 30;
 const HASH_BUFFER_BYTES: usize = 64 * 1024;
 const PAIR_RLE_MAGIC: &[u8; 4] = b"PRL1";
 const USAGE: &str = "Usage:
-  cargo run --release -p narf-corpus-bench -- \
+  cargo run --release -p narf-corpus-bench --features host-benchmark -- \
     --corpus-id ID --corpus-dir DIR --manifest FILE --output-csv FILE \
     [--metadata-out FILE] [--max-file-bytes N] [--max-total-bytes N] \
     [--warmups N] [--samples N]
@@ -606,7 +606,13 @@ fn encode_codec(codec: Codec, input: &[u8]) -> AppResult<Vec<u8>> {
     match codec {
         Codec::Identity => Ok(input.to_vec()),
         Codec::PairRle => pair_rle_encode(input),
-        Codec::NarfV3 => Ok(encode(input)),
+        Codec::NarfV3 => {
+            let encoded = encode(input);
+            if encoded.len() < 5 || &encoded[..4] != b"NXAR" || encoded[4] != 3 {
+                return Err("NARF encoder did not emit a version-3 frame".to_owned());
+            }
+            Ok(encoded)
+        },
         Codec::Lz4 => Ok(compress_prepend_size(input)),
         Codec::Zstd => zstd::bulk::compress(input, 3)
             .map_err(|error| format!("Zstandard encode failed: {error}")),
@@ -1002,6 +1008,26 @@ mod tests {
                 assert_eq!(encode_codec(codec, &input).expect("deterministic encode"), encoded);
             }
         }
+    }
+
+    #[test]
+    fn narf_benchmark_encoder_emits_version_three_frames() {
+        let encoded = encode_codec(Codec::NarfV3, b"corpus fixture").expect("NARF encode");
+        assert_eq!(&encoded[..4], b"NXAR");
+        assert_eq!(encoded[4], 3);
+    }
+
+    #[test]
+    fn pair_rle_decoder_rejects_malformed_frames() {
+        assert!(pair_rle_decode(&[], 0).is_err());
+        let mut zero_run = Vec::from(*PAIR_RLE_MAGIC);
+        zero_run.extend_from_slice(&1u32.to_be_bytes());
+        zero_run.extend_from_slice(&[0, 0x41]);
+        assert!(pair_rle_decode(&zero_run, 1).is_err());
+        let mut truncated_pair = Vec::from(*PAIR_RLE_MAGIC);
+        truncated_pair.extend_from_slice(&1u32.to_be_bytes());
+        truncated_pair.push(1);
+        assert!(pair_rle_decode(&truncated_pair, 1).is_err());
     }
 
     #[test]
