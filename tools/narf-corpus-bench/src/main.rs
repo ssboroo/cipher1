@@ -859,15 +859,26 @@ fn build_metadata(
         .or_else(|_| env::var("CIPHER1_COMMIT_SHA"))
         .unwrap_or_else(|_| "not-provided".to_owned());
     format!(
-        "schema_version=1\ncorpus_id={}\nmanifest_sha256={}\nfile_count={}\nempty_file_count={}\ntotal_input_bytes={}\nmax_file_bytes={}\nmax_total_bytes={}\nwarmups={}\nsamples={}\npackage_version={}\ntarget_os={}\ntarget_arch={}\nbuild_profile={}\nrustc_version={}\ncargo_version={}\nrepository_commit={}\ncpu_model=not_collected_by_runner\ndependency_version_requirements=brotli:7.0,lz4_flex:0.11,sha2:0.10.9,zstd:0.13,nexus-transform:workspace\ncodec_pair_rle=PRL1_u32_be_count_value\ncodec_narf=nexus_transform_current_v3_writer\ncodec_lz4=lz4_flex_size_prepended\ncodec_zstd=zstd_bulk_level_3\ncodec_brotli=quality_5_lgwin_22_buffer_4096\n",
+        "schema_version=1\ncorpus_id={}\nmanifest_sha256={}\nfile_count={}\nempty_file_count={}\ntotal_input_bytes={}\nmax_file_bytes={}\nmax_total_bytes={}\nwarmups={}\nsamples={}\npackage_version={}\ntarget_os={}\ntarget_arch={}\nbuild_profile={}\nrustc_version={}\ncargo_version={}\ncargo_lock_sha256={}\nrepository_commit={}\ncpu_model=not_collected_by_runner\ndependency_version_requirements=brotli:7.0,lz4_flex:0.11,sha2:0.10.9,zstd:0.13,nexus-transform:workspace\ncodec_pair_rle=PRL1_u32_be_count_value\ncodec_narf=nexus_transform_current_v3_writer\ncodec_lz4=lz4_flex_size_prepended\ncodec_zstd=zstd_bulk_level_3\ncodec_brotli=quality_5_lgwin_22_buffer_4096\n",
         config.corpus_id, format_digest(manifest_digest), entries.len(), empty_files,
         total_input_bytes, config.max_file_bytes, config.max_total_bytes,
         config.warmups, config.samples, env!("CARGO_PKG_VERSION"),
         env::consts::OS, env::consts::ARCH,
         if cfg!(debug_assertions) { "debug" } else { "release" },
         command_version("rustc"), command_version("cargo"),
+        workspace_lock_digest(),
         sanitize_metadata_value(&commit),
     )
+}
+
+fn workspace_lock_digest() -> String {
+    let Some(workspace_root) = Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2) else {
+        return "unavailable".to_owned();
+    };
+    match fs::read(workspace_root.join("Cargo.lock")) {
+        Ok(contents) => format_digest(&sha256(&contents)),
+        Err(_) => "unavailable".to_owned(),
+    }
 }
 
 fn command_version(program: &str) -> String {
