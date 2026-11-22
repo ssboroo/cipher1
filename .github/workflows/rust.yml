@@ -28,6 +28,14 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Test corpus manifest generator
+        run: python -m unittest discover -s tools/narf-corpus-bench/scripts -p 'test_*.py' -v
+
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -42,6 +50,9 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+      - name: Test public corpus benchmark runner
+        run: cargo test -p narf-corpus-bench --features host-benchmark
+
       - name: Check library MSRV
         if: runner.os == 'Linux'
         run: |
@@ -51,7 +62,7 @@ jobs:
       - name: Check dependency supply chain
         shell: bash
         run: |
-          cargo tree --workspace --all-targets --prefix none > /tmp/cipher1-dependency-tree.txt
+          cargo tree --workspace --all-targets --features narf-corpus-bench/host-benchmark --prefix none > /tmp/cipher1-dependency-tree.txt
           if grep -E '^(arrayref v0[.]3[.]10|internment v0[.]8[.]7|append-only-vec v0[.]1[.]9|proc-macro1 |proc-macro-en |aovine |arone |aronenao |tinymember )' /tmp/cipher1-dependency-tree.txt; then
             echo "A known-compromised Rust crate version is present in the dependency graph." >&2
             exit 1
@@ -68,6 +79,10 @@ jobs:
       - name: Run Clippy
         if: runner.os == 'Linux'
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run benchmark runner Clippy
+        if: runner.os == 'Linux'
+        run: cargo clippy -p narf-corpus-bench --features host-benchmark --all-targets -- -D warnings
 
       - name: Record benchmark environment
         if: runner.os == 'Linux'
