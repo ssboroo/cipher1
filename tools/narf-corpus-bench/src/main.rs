@@ -84,11 +84,12 @@ impl Codec {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Percentiles {
+#[derive(Debug, Clone)]
+struct Measurement {
     p50: f64,
     p95: f64,
     p99: f64,
+    raw_samples: Vec<f64>,
 }
 
 #[derive(Debug)]
@@ -97,8 +98,8 @@ struct FileResult {
     codec: Codec,
     input_bytes: u64,
     encoded_bytes: u64,
-    encode: Percentiles,
-    decode: Percentiles,
+    encode: Measurement,
+    decode: Measurement,
     samples: usize,
 }
 
@@ -171,7 +172,7 @@ fn run() -> AppResult<()> {
     )?;
 
     let mut csv = String::from(
-        "record_type,corpus_id,file_path,codec,file_count,nonempty_file_count,input_bytes,encoded_bytes,ratio,aggregate_ratio,median_file_ratio,encode_p50_ns_per_byte,encode_p95_ns_per_byte,encode_p99_ns_per_byte,decode_p50_ns_per_byte,decode_p95_ns_per_byte,decode_p99_ns_per_byte,sample_count\n",
+        "record_type,corpus_id,file_path,codec,file_count,nonempty_file_count,input_bytes,encoded_bytes,ratio,aggregate_ratio,median_file_ratio,encode_p50_ns_per_byte,encode_p95_ns_per_byte,encode_p99_ns_per_byte,decode_p50_ns_per_byte,decode_p95_ns_per_byte,decode_p99_ns_per_byte,sample_count,encode_raw_samples_ns_per_byte,decode_raw_samples_ns_per_byte\n",
     );
     let mut aggregates = BTreeMap::<&'static str, Aggregate>::new();
     for codec in CODECS {
@@ -727,7 +728,7 @@ fn pair_rle_decode(input: &[u8], expected: usize) -> AppResult<Vec<u8>> {
     Ok(output)
 }
 
-fn measure<F>(input_len: usize, warmups: usize, samples: usize, mut operation: F) -> AppResult<Percentiles>
+fn measure<F>(input_len: usize, warmups: usize, samples: usize, mut operation: F) -> AppResult<Measurement>
 where
     F: FnMut() -> AppResult<Vec<u8>>,
 {
@@ -744,11 +745,13 @@ where
         black_box(&output);
         timings.push(elapsed_ns / input_len.max(1) as f64);
     }
-    timings.sort_by(f64::total_cmp);
-    Ok(Percentiles {
-        p50: nearest_rank(&timings, 0.50),
-        p95: nearest_rank(&timings, 0.95),
-        p99: nearest_rank(&timings, 0.99),
+    let mut sorted = timings.clone();
+    sorted.sort_by(f64::total_cmp);
+    Ok(Measurement {
+        p50: nearest_rank(&sorted, 0.50),
+        p95: nearest_rank(&sorted, 0.95),
+        p99: nearest_rank(&sorted, 0.99),
+        raw_samples: timings,
     })
 }
 
@@ -785,6 +788,8 @@ fn append_file_row(output: &mut String, corpus_id: &str, result: &FileResult) {
         format!("{:.3}", result.encode.p99), format!("{:.3}", result.decode.p50),
         format!("{:.3}", result.decode.p95), format!("{:.3}", result.decode.p99),
         result.samples.to_string(),
+        sample_list(&result.encode.raw_samples),
+        sample_list(&result.decode.raw_samples),
     ];
     append_csv_row(output, &fields);
 }
@@ -810,9 +815,13 @@ fn append_aggregate_row(
         total_input_bytes.to_string(), aggregate.encoded_bytes.to_string(), String::new(),
         aggregate_ratio, median_ratio,
         String::new(), String::new(), String::new(), String::new(), String::new(),
-        String::new(), String::new(),
+        String::new(), String::new(), String::new(), String::new(),
     ];
     append_csv_row(output, &fields);
+}
+
+fn sample_list(samples: &[f64]) -> String {
+    samples.iter().map(f64::to_string).collect::<Vec<_>>().join(";")
 }
 
 fn append_csv_row(output: &mut String, fields: &[String]) {
