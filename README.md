@@ -64,6 +64,36 @@ cargo bench -p nexus-transform --bench narf_baseline
 
 The benchmark currently uses deterministic synthetic fixtures and should not be used alone to make general performance claims. An opt-in, checksum-verified public-corpus runner is available in `tools/narf-corpus-bench`; see [the runner guide](docs/PUBLIC_CORPUS_BENCHMARK_RUNNER.md).
 
+## Reproducible public-corpus workflow
+
+The optional host benchmark compares complete encoded representations from identity, benchmark-only pair-RLE, NARF v3, LZ4, Zstandard, and Brotli. It verifies each corpus file against a SHA-256 manifest before benchmarking and records per-file plus aggregate CSV results.
+
+Generate the manifest with the Python 3 standard-library helper:
+
+```bash
+python3 tools/narf-corpus-bench/scripts/create_manifest.py \
+  --corpus-dir /data/my-corpus \
+  --output /data/my-corpus.manifest.tsv
+```
+
+Then run the Rust benchmark in release mode:
+
+```bash
+cargo run --release -p narf-corpus-bench --features host-benchmark -- \
+  --corpus-id my-corpus-v1 \
+  --corpus-dir /data/my-corpus \
+  --manifest /data/my-corpus.manifest.tsv \
+  --output-csv /tmp/my-corpus-results.csv
+```
+
+See [benchmark runner methodology](docs/PUBLIC_CORPUS_BENCHMARK_RUNNER.md) and [manifest generator documentation](docs/CORPUS_MANIFEST_GENERATOR.md). The generator and runner do not establish dataset provenance or licensing permission. Review and retain each dataset's source, version, retrieval date, and license evidence. Keep corpus files immutable during a run. Synthetic CI fixtures are smoke tests, not public-corpus performance evidence.
+
+Run the generator tests with:
+
+```bash
+python3 -m unittest discover -s tools/narf-corpus-bench/scripts -p 'test_*.py' -v
+```
+
 ## Platform validation
 
 The CI matrix runs workspace tests on Linux, Windows, and macOS. Linux CI additionally checks the declared Rust 1.85 library MSRV, Clippy, dependency supply-chain rules, and compile targets for WebAssembly, Android ARM64, iOS ARM64, and Windows ARM64. These compile checks do not constitute full runtime or conformance validation on every target.
