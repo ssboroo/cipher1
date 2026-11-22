@@ -821,7 +821,7 @@ fn append_aggregate_row(
 }
 
 fn sample_list(samples: &[f64]) -> String {
-    samples.iter().map(f64::to_string).collect::<Vec<_>>().join(";")
+    samples.iter().map(|sample| sample.to_string()).collect::<Vec<_>>().join(";")
 }
 
 fn append_csv_row(output: &mut String, fields: &[String]) {
@@ -853,7 +853,7 @@ fn build_metadata(
         .or_else(|_| env::var("CIPHER1_COMMIT_SHA"))
         .unwrap_or_else(|_| "not-provided".to_owned());
     format!(
-        "schema_version=1\ncorpus_id={}\nmanifest_sha256={}\nfile_count={}\nempty_file_count={}\ntotal_input_bytes={}\nmax_file_bytes={}\nmax_total_bytes={}\nwarmups={}\nsamples={}\npackage_version={}\ntarget_os={}\ntarget_arch={}\nrustc_version={}\ncargo_version={}\nrepository_commit={}\ncpu_model=not_collected_by_runner\ndependency_version_requirements=brotli_7.0;_lz4_flex_0.11;_sha2_0.10.9;_zstd_0.13\ncodec_pair_rle=PRL1_u32_be_count_value\ncodec_narf=nexus_transform_current_v3_writer\ncodec_lz4=lz4_flex_size_prepended\ncodec_zstd=zstd_bulk_level_3\ncodec_brotli=quality_5_lgwin_22_buffer_4096\n",
+        "schema_version=1\ncorpus_id={}\nmanifest_sha256={}\nfile_count={}\nempty_file_count={}\ntotal_input_bytes={}\nmax_file_bytes={}\nmax_total_bytes={}\nwarmups={}\nsamples={}\npackage_version={}\ntarget_os={}\ntarget_arch={}\nrustc_version={}\ncargo_version={}\nrepository_commit={}\ncpu_model=not_collected_by_runner\ndependency_version_requirements=brotli:7.0,lz4_flex:0.11,sha2:0.10.9,zstd:0.13,nexus-transform:workspace\ncodec_pair_rle=PRL1_u32_be_count_value\ncodec_narf=nexus_transform_current_v3_writer\ncodec_lz4=lz4_flex_size_prepended\ncodec_zstd=zstd_bulk_level_3\ncodec_brotli=quality_5_lgwin_22_buffer_4096\n",
         config.corpus_id, format_digest(manifest_digest), entries.len(), empty_files,
         total_input_bytes, config.max_file_bytes, config.max_total_bytes,
         config.warmups, config.samples, env!("CARGO_PKG_VERSION"),
