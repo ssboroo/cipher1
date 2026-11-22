@@ -62,7 +62,7 @@ The benchmark can be run with:
 cargo bench -p nexus-transform --bench narf_baseline
 ```
 
-The benchmark currently uses deterministic synthetic fixtures and should not be used alone to make general performance claims.
+The benchmark currently uses deterministic synthetic fixtures and should not be used alone to make general performance claims. An opt-in, checksum-verified public-corpus runner is available in `tools/narf-corpus-bench`; see [the runner guide](docs/PUBLIC_CORPUS_BENCHMARK_RUNNER.md).
 
 ## Platform validation
 
