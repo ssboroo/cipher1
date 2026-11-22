@@ -995,13 +995,14 @@ mod tests {
         let root = temp_dir();
         let manifest = root.join("manifest.tsv");
         fs::write(&manifest, "manifest").expect("write manifest");
+        let canonical_root = fs::canonicalize(&root).unwrap();
         let canonical_manifest = fs::canonicalize(&manifest).unwrap();
-        assert!(prepare_output_target(&root.join("inside.csv"), &root, &canonical_manifest).is_err());
+        assert!(prepare_output_target(&root.join("inside.csv"), &canonical_root, &canonical_manifest).is_err());
 
         let outside = root.with_extension("out");
         fs::create_dir_all(&outside).expect("create output directory");
         fs::write(outside.join("existing.csv"), "old").expect("write existing output");
-        assert!(prepare_output_target(&outside.join("existing.csv"), &root, &canonical_manifest).is_err());
+        assert!(prepare_output_target(&outside.join("existing.csv"), &canonical_root, &canonical_manifest).is_err());
         fs::remove_dir_all(root).expect("remove root");
         fs::remove_dir_all(outside).expect("remove output directory");
     }
