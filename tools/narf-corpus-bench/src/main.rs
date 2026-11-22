@@ -300,7 +300,7 @@ where
     let output_csv = PathBuf::from(required("--output-csv")?);
     let metadata_out = values
         .get("--metadata-out")
-        .map(PathBuf::from)
+        .map(|value| PathBuf::from(value.as_str()))
         .unwrap_or_else(|| {
             let mut path = output_csv.as_os_str().to_os_string();
             path.push(".metadata.txt");
