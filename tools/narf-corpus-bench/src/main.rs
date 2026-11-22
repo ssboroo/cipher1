@@ -1020,7 +1020,7 @@ mod tests {
     #[test]
     fn pair_rle_decoder_rejects_malformed_frames() {
         assert!(pair_rle_decode(&[], 0).is_err());
-        let mut zero_run = Vec::from(*PAIR_RLE_MAGIC);
+        let mut zero_run = PAIR_RLE_MAGIC.to_vec();
         zero_run.extend_from_slice(&1u32.to_be_bytes());
         zero_run.extend_from_slice(&[0, 0x41]);
         assert!(pair_rle_decode(&zero_run, 1).is_err());
