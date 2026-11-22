@@ -130,7 +130,20 @@ fn run() -> AppResult<()> {
         return Err("corpus directory is not a directory".to_owned());
     }
 
-    let manifest_bytes = fs::read(&config.manifest)
+    let manifest_metadata = fs::metadata(&config.manifest)
+        .map_err(|error| format!("cannot inspect manifest: {error}"))?;
+    if manifest_metadata.len() > MAX_MANIFEST_BYTES {
+        return Err(format!("manifest exceeds the {MAX_MANIFEST_BYTES}-byte limit"));
+    }
+    let manifest_file = File::open(&config.manifest)
+        .map_err(|error| format!("cannot open manifest: {error}"))?;
+    let mut manifest_bytes = Vec::new();
+    manifest_bytes
+        .try_reserve_exact(manifest_metadata.len() as usize)
+        .map_err(|error| format!("cannot reserve manifest buffer: {error}"))?;
+    manifest_file
+        .take(MAX_MANIFEST_BYTES + 1)
+        .read_to_end(&mut manifest_bytes)
         .map_err(|error| format!("cannot read manifest: {error}"))?;
     if manifest_bytes.len() as u64 > MAX_MANIFEST_BYTES {
         return Err(format!("manifest exceeds the {MAX_MANIFEST_BYTES}-byte limit"));
@@ -432,17 +445,24 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
 }
 
-fn sha256_file(path: &Path) -> AppResult<[u8; 32]> {
-    let mut file = File::open(path).map_err(|error| format!("cannot open {}: {error}", path.display()))?;
+fn sha256_file(path: &Path, expected_bytes: u64) -> AppResult<[u8; 32]> {
+    let file = File::open(path).map_err(|error| format!("cannot open {}: {error}", path.display()))?;
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; HASH_BUFFER_BYTES];
+    let mut total = 0u64;
+    let mut reader = file.take(expected_bytes.saturating_add(1));
     loop {
-        let count = file.read(&mut buffer)
+        let count = reader.read(&mut buffer)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
         if count == 0 {
             break;
         }
+        total = total.checked_add(count as u64)
+            .ok_or_else(|| format!("file size overflow while hashing {}", path.display()))?;
         hasher.update(&buffer[..count]);
+    }
+    if total != expected_bytes {
+        return Err(format!("file size changed while hashing {}", path.display()));
     }
     Ok(hasher.finalize().into())
 }
@@ -472,7 +492,7 @@ fn preflight(
                 entry.path, entry.bytes, metadata.len()
             ));
         }
-        if sha256_file(&path)? != entry.digest {
+        if sha256_file(&path, entry.bytes)? != entry.digest {
             return Err(format!("SHA-256 mismatch for {}", entry.path));
         }
     }
@@ -535,7 +555,7 @@ fn prepare_output_target(path: &Path, root: &Path, manifest: &Path) -> AppResult
     if target.starts_with(root) {
         return Err(format!("output must be outside the corpus directory: {}", target.display()));
     }
-    if target == manifest {
+    if target.as_path() == manifest {
         return Err("output path must not overwrite the manifest".to_owned());
     }
     if fs::symlink_metadata(&target).is_ok() {
