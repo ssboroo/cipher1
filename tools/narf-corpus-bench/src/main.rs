@@ -758,7 +758,7 @@ fn append_file_row(output: &mut String, corpus_id: &str, result: &FileResult) {
     };
     let fields = vec![
         "file".to_owned(), corpus_id.to_owned(), result.path.clone(), result.codec.name().to_owned(),
-        "1".to_owned(), usize::from(result.input_bytes > 0).to_string(),
+        "1".to_owned(), (if result.input_bytes > 0 { "1" } else { "0" }).to_owned(),
         result.input_bytes.to_string(), result.encoded_bytes.to_string(), ratio,
         String::new(), String::new(),
         format!("{:.3}", result.encode.p50), format!("{:.3}", result.encode.p95),
