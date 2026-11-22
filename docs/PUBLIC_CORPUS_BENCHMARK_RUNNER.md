@@ -74,7 +74,7 @@ The size metric is the complete encoded byte count. The aggregate ratio is `sum(
 
 ## Output
 
-The CSV contains one `file` row for every file/codec pair and one `aggregate` row for each codec. File rows include input bytes, encoded bytes, per-file ratio, encode/decode nearest-rank p50/p95/p99 nanoseconds per input byte, and sample count. Aggregate rows include file counts, total input/encoded bytes, aggregate ratio, and median non-empty-file ratio.
+The CSV contains one `file` row for every file/codec pair and one `aggregate` row for each codec. File rows include input bytes, encoded bytes, per-file ratio, encode/decode nearest-rank p50/p95/p99 nanoseconds per input byte, sample count, and the raw measured encode/decode samples as semicolon-separated values. Aggregate rows include file counts, total input/encoded bytes, aggregate ratio, and median non-empty-file ratio.
 
 The metadata text records the manifest SHA-256, corpus identifier, size limits, sample settings, package version, target OS/architecture, available Rust/Cargo version strings, optional GitHub commit SHA, and fixed codec settings. CPU model is explicitly marked as not collected; record it separately with the experiment log. Keep the original manifest, metadata file, CSV, source license evidence, retrieval date, and repository commit together.
 
