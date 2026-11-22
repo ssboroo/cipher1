@@ -11,8 +11,8 @@ The runner is an experiment harness, not evidence of a compression advantage. It
 Use a release build for measurements:
 
 ```bash
-cargo test -p narf-corpus-bench
-cargo run --release -p narf-corpus-bench -- \
+cargo test -p narf-corpus-bench --features host-benchmark
+cargo run --release -p narf-corpus-bench --features host-benchmark -- \
   --corpus-id my-corpus-v1 \
   --corpus-dir /data/my-corpus \
   --manifest /data/my-corpus.manifest.tsv \
