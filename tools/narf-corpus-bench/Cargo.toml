@@ -12,3 +12,12 @@ lz4_flex = "0.11"
 nexus-transform = { path = "../../crates/nexus-transform" }
 sha2 = "=0.10.9"
 zstd = "0.13"
+
+[features]
+default = []
+host-benchmark = []
+
+[[bin]]
+name = "narf-corpus-bench"
+path = "src/main.rs"
+required-features = ["host-benchmark"]
