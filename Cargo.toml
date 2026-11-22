@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/cipher1-core", "crates/nexus-transform"]
+members = ["crates/cipher1-core", "crates/nexus-transform", "tools/narf-corpus-bench"]
 resolver = "2"
 
 [workspace.package]
