@@ -32,6 +32,8 @@ pub enum TransformError {
     AllocationFailed,
     #[error("run-length stream is malformed")]
     InvalidRunStream,
+    #[error("version-3 token stream is not canonical")]
+    NonCanonicalEncoding,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -166,29 +168,75 @@ pub fn decode_with_limits(
         return Err(TransformError::InvalidParameters);
     }
     let residual_count = output_len.saturating_sub(2);
-    let residuals = if version == VERSION {
-        unpack_runs_v3(&input[HEADER_LEN..], residual_count)?
+    let body = &input[HEADER_LEN..];
+    // Reserve the final output capacity while decoding residuals so the
+    // reconstruction below can reuse this allocation without a second
+    // output-sized buffer.
+    let mut residuals = if version == VERSION {
+        unpack_runs_v3_with_capacity(body, residual_count, output_len)?
     } else {
-        unpack_runs(&input[HEADER_LEN..], residual_count)?
+        unpack_runs_with_capacity(body, residual_count, output_len)?
     };
-    let mut output = try_vec_with_capacity(output_len)?;
+    if version == VERSION && !is_canonical_v3(body, &residuals) {
+        return Err(TransformError::NonCanonicalEncoding);
+    }
+    reconstruct_residuals_in_place(
+        &mut residuals,
+        output_len,
+        seed0,
+        seed1,
+        alpha,
+        beta,
+    )?;
+    Ok(residuals)
+}
 
-    if output_len >= 1 {
-        output.push(seed0);
+/// Reconstruct the original bytes in the residual buffer's existing allocation.
+/// The caller reserves at least `output_len` capacity while decoding.
+fn reconstruct_residuals_in_place(
+    residuals: &mut Vec<u8>,
+    output_len: usize,
+    seed0: u8,
+    seed1: u8,
+    alpha: u8,
+    beta: u8,
+) -> Result<(), TransformError> {
+    let expected_residuals = output_len.saturating_sub(2);
+    if residuals.len() != expected_residuals {
+        return Err(TransformError::InvalidRunStream);
     }
+
+    if residuals.capacity() < output_len {
+        let additional = output_len
+            .checked_sub(residuals.len())
+            .ok_or(TransformError::InvalidLength)?;
+        residuals
+            .try_reserve_exact(additional)
+            .map_err(|_| TransformError::AllocationFailed)?;
+    }
+
+    residuals.resize(output_len, 0);
+    if output_len == 0 {
+        return Ok(());
+    }
+
     if output_len >= 2 {
-        output.push(seed1);
+        residuals.copy_within(0..expected_residuals, 2);
+        residuals[1] = seed1;
     }
-    for residual in residuals {
-        let i = output.len();
-        let previous = output[i - 1] as u16;
-        let previous2 = output[i - 2] as u16;
-        let value = (residual as u16
+    residuals[0] = seed0;
+
+    for i in 2..output_len {
+        let residual = residuals[i] as u16;
+        let previous = residuals[i - 1] as u16;
+        let previous2 = residuals[i - 2] as u16;
+        let value = (residual
             + (alpha as u16 * previous)
-            + (beta as u16 * previous2)) & 0xff;
-        output.push(value as u8);
+            + (beta as u16 * previous2))
+            & 0xff;
+        residuals[i] = value as u8;
     }
-    Ok(output)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -390,8 +438,17 @@ fn read_uleb128(input: &[u8], start: usize) -> Result<(usize, usize), TransformE
     Err(TransformError::InvalidRunStream)
 }
 
+#[cfg(test)]
 fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
-    let mut out = try_vec_with_capacity(expected)?;
+    unpack_runs_v3_with_capacity(input, expected, expected)
+}
+
+fn unpack_runs_v3_with_capacity(
+    input: &[u8],
+    expected: usize,
+    capacity: usize,
+) -> Result<Vec<u8>, TransformError> {
+    let mut out = try_vec_with_capacity(capacity.max(expected))?;
     let mut i = 0usize;
     while i < input.len() {
         let control = input[i];
@@ -435,6 +492,101 @@ fn unpack_runs_v3(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformErr
     Ok(out)
 }
 
+/// Check the deterministic version-3 token segmentation without allocating.
+///
+/// Canonicality is evaluated for the residual sequence selected by the frame's
+/// alpha and beta values. It does not verify that those coefficients are the
+/// globally optimal pair chosen by the encoder.
+fn is_canonical_v3(encoded: &[u8], residuals: &[u8]) -> bool {
+    let mut encoded_index = 0usize;
+    let mut residual_index = 0usize;
+
+    while residual_index < residuals.len() {
+        let value = residuals[residual_index];
+        let mut run = 1usize;
+        while residual_index + run < residuals.len()
+            && residuals[residual_index + run] == value
+        {
+            run += 1;
+        }
+
+        if run >= 128 {
+            if !consume_expected_byte(encoded, &mut encoded_index, 0xff) {
+                return false;
+            }
+            let mut remaining = run;
+            loop {
+                let mut byte = (remaining & 0x7f) as u8;
+                remaining >>= 7;
+                if remaining != 0 {
+                    byte |= 0x80;
+                }
+                if !consume_expected_byte(encoded, &mut encoded_index, byte) {
+                    return false;
+                }
+                if remaining == 0 {
+                    break;
+                }
+            }
+            if !consume_expected_byte(encoded, &mut encoded_index, value) {
+                return false;
+            }
+            residual_index += run;
+        } else if run >= 3 {
+            let control = 0x80 | ((run - 1) as u8);
+            if !consume_expected_byte(encoded, &mut encoded_index, control)
+                || !consume_expected_byte(encoded, &mut encoded_index, value)
+            {
+                return false;
+            }
+            residual_index += run;
+        } else {
+            let start = residual_index;
+            while residual_index < residuals.len() && residual_index - start < 128 {
+                let next_value = residuals[residual_index];
+                let mut next_run = 1usize;
+                while next_run < 3
+                    && residual_index + next_run < residuals.len()
+                    && residuals[residual_index + next_run] == next_value
+                {
+                    next_run += 1;
+                }
+                if next_run >= 3 {
+                    break;
+                }
+                residual_index += next_run.min(128 - (residual_index - start));
+            }
+
+            let count = residual_index - start;
+            if count == 0
+                || !consume_expected_byte(encoded, &mut encoded_index, (count - 1) as u8)
+            {
+                return false;
+            }
+            let Some(end) = encoded_index.checked_add(count) else {
+                return false;
+            };
+            let Some(actual) = encoded.get(encoded_index..end) else {
+                return false;
+            };
+            if actual != &residuals[start..residual_index] {
+                return false;
+            }
+            encoded_index = end;
+        }
+    }
+
+    encoded_index == encoded.len()
+}
+
+fn consume_expected_byte(encoded: &[u8], cursor: &mut usize, expected: u8) -> bool {
+    if encoded.get(*cursor).copied() != Some(expected) {
+        return false;
+    }
+    *cursor += 1;
+    true
+}
+
 #[cfg(test)]
 fn run_length(input: &[u8], start: usize) -> usize {
     let mut end = start + 1;
@@ -444,8 +596,17 @@ fn run_length(input: &[u8], start: usize) -> usize {
     end - start
 }
 
+#[cfg(test)]
 fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError> {
-    let mut out = try_vec_with_capacity(expected)?;
+    unpack_runs_with_capacity(input, expected, expected)
+}
+
+fn unpack_runs_with_capacity(
+    input: &[u8],
+    expected: usize,
+    capacity: usize,
+) -> Result<Vec<u8>, TransformError> {
+    let mut out = try_vec_with_capacity(capacity.max(expected))?;
     let mut i = 0;
     while i < input.len() {
         let control = input[i];
@@ -474,6 +635,79 @@ fn unpack_runs(input: &[u8], expected: usize) -> Result<Vec<u8>, TransformError>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn frame_with_tokens(version: u8, residual_count: usize, tokens: &[u8]) -> Vec<u8> {
+        let original_len = residual_count + 2;
+        let mut frame = Vec::with_capacity(HEADER_LEN + tokens.len());
+        frame.extend_from_slice(MAGIC);
+        frame.push(version);
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&(original_len as u64).to_be_bytes());
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(tokens);
+        frame
+    }
+
+    #[test]
+    fn decoder_reconstructs_in_the_preallocated_residual_buffer() {
+        let lengths = [0usize, 1, 2, 3, 4, 127, 128, 129, 255, 256, 257, 1024];
+        for version in [LEGACY_VERSION, LEGACY_VERSION_2, VERSION] {
+            for &alpha in &CANDIDATES {
+                for &beta in &CANDIDATES {
+                    for &len in &lengths {
+                        let input: Vec<u8> = (0..len)
+                            .map(|i| ((i * 73 + i * i * 19 + 11) & 0xff) as u8)
+                            .collect();
+                        let residuals = forward_residual(&input, alpha, beta);
+                        let tokens = if version == VERSION {
+                            pack_residuals_v3(&input, alpha, beta)
+                        } else {
+                            pack_runs(&residuals)
+                        };
+                        let mut decoded_residuals = if version == VERSION {
+                            unpack_runs_v3_with_capacity(
+                                &tokens,
+                                residuals.len(),
+                                input.len(),
+                            )
+                            .unwrap()
+                        } else {
+                            unpack_runs_with_capacity(
+                                &tokens,
+                                residuals.len(),
+                                input.len(),
+                            )
+                            .unwrap()
+                        };
+                        assert!(
+                            decoded_residuals.capacity() >= input.len(),
+                            "version={version}, len={len}"
+                        );
+                        let allocation = decoded_residuals.as_ptr();
+                        reconstruct_residuals_in_place(
+                            &mut decoded_residuals,
+                            input.len(),
+                            input.first().copied().unwrap_or(0),
+                            input.get(1).copied().unwrap_or(0),
+                            alpha,
+                            beta,
+                        )
+                        .unwrap();
+                        assert_eq!(
+                            decoded_residuals.as_ptr(),
+                            allocation,
+                            "reconstruction reallocated: version={version}, len={len}"
+                        );
+                        assert_eq!(
+                            decoded_residuals,
+                            input,
+                            "round trip mismatch: version={version}, alpha={alpha}, beta={beta}, len={len}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn round_trip_empty_and_short_inputs() {
@@ -712,6 +946,62 @@ mod tests {
     }
 
     #[test]
+    fn version_three_accepts_canonical_literal_and_repeat_tokens() {
+        let literal = frame_with_tokens(VERSION, 4, &[0x03, 1, 2, 3, 4]);
+        assert_eq!(decode(&literal).unwrap(), [0, 0, 1, 2, 3, 4]);
+
+        let short_run = frame_with_tokens(VERSION, 3, &[0x82, 0x41]);
+        assert_eq!(decode(&short_run).unwrap(), [0, 0, 0x41, 0x41, 0x41]);
+
+        let long_run = frame_with_tokens(VERSION, 130, &[0xff, 0x82, 0x01, 0x41]);
+        assert_eq!(decode(&long_run).unwrap(), [vec![0, 0], vec![0x41; 130]].concat());
+    }
+
+    #[test]
+    fn version_three_rejects_noncanonical_token_segmentations() {
+        let cases = [
+            (
+                vec![1, 2, 3, 4],
+                vec![0x01, 1, 2, 0x01, 3, 4],
+            ),
+            (
+                vec![0x41; 3],
+                vec![0x02, 0x41, 0x41, 0x41],
+            ),
+            (
+                vec![0x41; 130],
+                vec![0xfe, 0x41, 0x82, 0x41],
+            ),
+            (
+                vec![0x10, 0x41, 0x41, 0x41, 0x41],
+                vec![0x01, 0x10, 0x41, 0x82, 0x41],
+            ),
+            (
+                vec![0x41; 131],
+                vec![0xff, 0x80, 0x01, 0x41, 0x82, 0x41],
+            ),
+        ];
+
+        for (residuals, tokens) in cases {
+            let frame = frame_with_tokens(VERSION, residuals.len(), &tokens);
+            assert_eq!(
+                decode(&frame),
+                Err(TransformError::NonCanonicalEncoding),
+                "tokens={tokens:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_versions_keep_accepting_noncanonical_literal_segmentation() {
+        let tokens = [0x01, 1, 2, 0x01, 3, 4];
+        for version in [LEGACY_VERSION, LEGACY_VERSION_2] {
+            let frame = frame_with_tokens(version, 4, &tokens);
+            assert_eq!(decode(&frame).unwrap(), [0, 0, 1, 2, 3, 4]);
+        }
+    }
+
+    #[test]
     fn raw_mode_rejects_length_mismatch_and_noncanonical_seeds() {
         let input: Vec<u8> = (0_u16..256)
             .map(|i| (i.wrapping_mul(73).wrapping_add(i.wrapping_mul(i).wrapping_mul(19))) as u8)
@@ -798,4 +1088,227 @@ mod tests {
             assert_eq!(unpack_runs(&pack_runs(&repeated), len).unwrap(), repeated);
         }
     }
+    #[test]
+    fn canonical_tokenization_matches_exhaustive_small_residuals() {
+        // Exhaustively enumerate all sequences over a four-byte alphabet up to
+        // length eight. The all-literal representation is always parseable;
+        // canonicality must accept it exactly when it matches the encoder.
+        for len in 0..=8 {
+            for mut word in 0..4usize.pow(len as u32) {
+                let mut residuals = vec![0u8; len];
+                for value in &mut residuals {
+                    *value = (word & 0x03) as u8;
+                    word >>= 2;
+                }
+
+                let mut source = vec![0, 0];
+                source.extend_from_slice(&residuals);
+                let canonical = pack_residuals_v3(&source, 0, 0);
+                assert!(
+                    is_canonical_v3(&canonical, &residuals),
+                    "encoder output rejected for residuals={residuals:?}"
+                );
+
+                let mut all_literals = Vec::new();
+                for chunk in residuals.chunks(128) {
+                    all_literals.push((chunk.len() - 1) as u8);
+                    all_literals.extend_from_slice(chunk);
+                }
+                assert_eq!(
+                    unpack_runs_v3(&all_literals, residuals.len()).unwrap(),
+                    residuals
+                );
+                assert_eq!(
+                    is_canonical_v3(&all_literals, &residuals),
+                    all_literals == canonical,
+                    "alternate literal segmentation result for residuals={residuals:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn canonical_tokenization_handles_run_and_literal_boundaries() {
+        for run_len in [1usize, 2, 3, 126, 127, 128, 129, 255, 256, 257, 16_384] {
+            let mut residuals = vec![0x11, 0x22];
+            residuals.extend(std::iter::repeat_n(0x41, run_len));
+            residuals.extend_from_slice(&[0x33, 0x44]);
+
+            let mut source = vec![0, 0];
+            source.extend_from_slice(&residuals);
+            let canonical = pack_residuals_v3(&source, 0, 0);
+            assert!(is_canonical_v3(&canonical, &residuals));
+            assert_eq!(
+                unpack_runs_v3(&canonical, residuals.len()).unwrap(),
+                residuals
+            );
+
+            let mut all_literals = Vec::new();
+            for chunk in residuals.chunks(128) {
+                all_literals.push((chunk.len() - 1) as u8);
+                all_literals.extend_from_slice(chunk);
+            }
+            assert_eq!(
+                unpack_runs_v3(&all_literals, residuals.len()).unwrap(),
+                residuals
+            );
+            assert_eq!(
+                is_canonical_v3(&all_literals, &residuals),
+                all_literals == canonical
+            );
+
+            if run_len >= 3 {
+                assert_ne!(all_literals, canonical);
+                assert!(!is_canonical_v3(&all_literals, &residuals));
+            }
+        }
+
+        // A two-byte equal group crossing a 128-byte literal boundary must be
+        // split between the adjacent canonical literal tokens.
+        let mut boundary = (0..130).map(|i| i as u8).collect::<Vec<_>>();
+        boundary[126] = 0xed;
+        boundary[127] = 0xee;
+        boundary[128] = 0xee;
+        boundary[129] = 0xef;
+        let mut source = vec![0, 0];
+        source.extend_from_slice(&boundary);
+        let canonical = pack_residuals_v3(&source, 0, 0);
+        assert!(is_canonical_v3(&canonical, &boundary));
+        assert_eq!(unpack_runs_v3(&canonical, boundary.len()).unwrap(), boundary);
+    }
+
+    #[test]
+    fn canonical_tokenization_rejects_split_extended_repeat() {
+        let residuals = vec![0x41; 257];
+        let mut source = vec![0, 0];
+        source.extend_from_slice(&residuals);
+        let canonical = pack_residuals_v3(&source, 0, 0);
+        assert!(is_canonical_v3(&canonical, &residuals));
+
+        // Three valid short-repeat tokens decode to the same bytes, but v3
+        // requires one extended-repeat token for this maximal run.
+        let alternate = [0xfe, 0x41, 0xfe, 0x41, 0x82, 0x41];
+        assert_eq!(
+            unpack_runs_v3(&alternate, residuals.len()).unwrap(),
+            residuals
+        );
+        assert!(!is_canonical_v3(&alternate, &residuals));
+    }
+
+    #[test]
+    fn canonical_tokenization_rejects_split_literal() {
+        let residuals = (0..129).map(|i| (i % 2) as u8).collect::<Vec<_>>();
+        let mut source = vec![0, 0];
+        source.extend_from_slice(&residuals);
+        let canonical = pack_residuals_v3(&source, 0, 0);
+        assert!(is_canonical_v3(&canonical, &residuals));
+
+        let mut alternate = vec![63];
+        alternate.extend_from_slice(&residuals[..64]);
+        alternate.push(64);
+        alternate.extend_from_slice(&residuals[64..]);
+        assert_eq!(
+            unpack_runs_v3(&alternate, residuals.len()).unwrap(),
+            residuals
+        );
+        assert!(!is_canonical_v3(&alternate, &residuals));
+    }
+
+
+    #[test]
+    fn token_size_estimator_matches_materialized_stream_for_all_candidates() {
+        let lengths = [
+            0usize, 1, 2, 3, 4, 126, 127, 128, 129, 130, 254, 255, 256, 257, 1024,
+            4096, 16_384,
+        ];
+        let mut inputs = Vec::new();
+
+        for len in lengths {
+            inputs.push(vec![0x5a; len]);
+            inputs.push((0..len).map(|i| i as u8).collect::<Vec<_>>());
+            inputs.push((0..len).map(|i| (i % 5) as u8).collect::<Vec<_>>());
+
+            let mut state = 0x9e37_79b9_u32 ^ len as u32;
+            inputs.push(
+                (0..len)
+                    .map(|_| {
+                        state ^= state << 13;
+                        state ^= state >> 17;
+                        state ^= state << 5;
+                        state as u8
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        for (input_index, input) in inputs.iter().enumerate() {
+            for &alpha in &CANDIDATES {
+                for &beta in &CANDIDATES {
+                    let estimated = residual_token_len(input, alpha, beta);
+                    let materialized = pack_residuals_v3(input, alpha, beta);
+                    assert_eq!(
+                        estimated,
+                        materialized.len(),
+                        "input_index={input_index}, input_len={}, alpha={alpha}, beta={beta}",
+                        input.len()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn selector_uses_minimum_materialized_cost_and_lexicographic_tie_break() {
+        let mut inputs = vec![Vec::new(), vec![0x42], vec![0x42, 0x17]];
+        for len in [3usize, 127, 128, 129, 255, 256, 257, 1024, 4096] {
+            inputs.push(vec![0x41; len]);
+            inputs.push((0..len).map(|i| (i % 7) as u8).collect());
+            inputs.push((0..len).map(|i| i as u8).collect());
+        }
+
+        for (input_index, input) in inputs.iter().enumerate() {
+            let mut best: Option<(usize, u8, u8)> = None;
+            for &alpha in &CANDIDATES {
+                for &beta in &CANDIDATES {
+                    let cost = pack_residuals_v3(input, alpha, beta).len();
+                    let replace = best
+                        .as_ref()
+                        .is_none_or(|(best_cost, best_alpha, best_beta)| {
+                            cost < *best_cost
+                                || (cost == *best_cost && (alpha, beta) < (*best_alpha, *best_beta))
+                        });
+                    if replace {
+                        best = Some((cost, alpha, beta));
+                    }
+                }
+            }
+
+            let (best_cost, best_alpha, best_beta) =
+                best.expect("the candidate set is non-empty");
+            let encoded = encode(input);
+            if best_cost >= input.len() {
+                assert_eq!(
+                    &encoded[5..7],
+                    &[RAW_MODE, RAW_MODE],
+                    "raw fallback mismatch for input_index={input_index}, input_len={}",
+                    input.len()
+                );
+                assert_eq!(&encoded[HEADER_LEN..], input.as_slice());
+            } else {
+                assert_eq!(
+                    (encoded[5], encoded[6]),
+                    (best_alpha, best_beta),
+                    "selector mismatch for input_index={input_index}, input_len={}",
+                    input.len()
+                );
+                assert_eq!(encoded.len(), HEADER_LEN + best_cost);
+                assert_eq!(
+                    &encoded[HEADER_LEN..],
+                    pack_residuals_v3(input, best_alpha, best_beta).as_slice()
+                );
+            }
+            assert_eq!(decode(&encoded).unwrap(), *input);
+        }
+    }
+
 }
