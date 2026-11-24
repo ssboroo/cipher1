@@ -63,23 +63,14 @@ fuzz_target!(|data: &[u8]| {
     // Preserve the header while mutating token bytes. The seed includes
     // extended repeats, a short repeat, and a literal region.
     let mut body_mutated = valid_frame.clone();
-    mutate_region(
-        &mut body_mutated,
-        operations,
-        HEADER_LEN,
-        body_mutated.len(),
-    );
+    let body_end = body_mutated.len();
+    mutate_region(&mut body_mutated, operations, HEADER_LEN, body_end);
     let _ = decode_with_limits(&body_mutated, limits);
 
     // Mutate version, coefficients, declared length, and seed fields while
     // preserving the magic so header validation and bounded allocation paths
     // are exercised independently of arbitrary-input decoding.
     let mut header_mutated = valid_frame;
-    mutate_region(
-        &mut header_mutated,
-        operations,
-        4,
-        HEADER_LEN,
-    );
+    mutate_region(&mut header_mutated, operations, 4, HEADER_LEN);
     let _ = decode_with_limits(&header_mutated, limits);
 });
