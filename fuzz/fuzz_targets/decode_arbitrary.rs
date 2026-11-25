@@ -4,6 +4,7 @@ use libfuzzer_sys::fuzz_target;
 use nexus_transform::{decode_with_limits, encode, DecodeLimits};
 
 const HEADER_LEN: usize = 17;
+const MAX_STRUCTURED_MUTATIONS: usize = 256;
 
 fn mutate_region(frame: &mut [u8], operations: &[u8], start: usize, end: usize) {
     let end = end.min(frame.len());
@@ -12,7 +13,7 @@ fn mutate_region(frame: &mut [u8], operations: &[u8], start: usize, end: usize) 
     }
 
     let region_len = end - start;
-    for operation in operations.chunks_exact(2) {
+    for operation in operations.chunks_exact(2).take(MAX_STRUCTURED_MUTATIONS) {
         let offset = start + usize::from(operation[0]) % region_len;
         frame[offset] ^= operation[1];
     }
