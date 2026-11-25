@@ -99,7 +99,7 @@ fuzz_target!(|data: &[u8]| {
     }
 
     // Start from a valid, non-raw v3 frame so mutations reach token parsing
-    // and canonicality checks instead of failing only at the magic header.
+    // and length validation instead of failing only at the magic header.
     let value = 16 + data.first().copied().unwrap_or(0x42) % 200;
     let repeat_len = 130 + usize::from(data.get(1).copied().unwrap_or(0)) % 126;
     let (valid_frame, payload) = structured_frame(value, repeat_len);
