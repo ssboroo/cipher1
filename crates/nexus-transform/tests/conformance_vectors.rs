@@ -54,5 +54,5 @@ fn rust_decoder_matches_shared_narf_frame_vectors() {
         vector_count += 1;
     }
 
-    assert_eq!(vector_count, 13, "unexpected conformance vector count");
+    assert_eq!(vector_count, 14, "unexpected conformance vector count");
 }
