@@ -40,7 +40,7 @@ Versions 1 and 2 use the original token grammar: literal controls encode 1..128 
 Version 3 uses an extended grammar:
 
 - Controls `0x00..0x7f` encode 1..128 literal bytes.
-- Controls `0x80..0xfe` encode 1..127 repeated bytes followed by the repeated byte. The encoder uses these for runs of 3..127.
+- Controls `0x80..0xfe` carry a short-repeat count of 1..127 followed by the repeated byte. Counts 1 and 2 are invalid; the decoder accepts only counts 3..127, and the encoder emits these for runs of 3..127.
 - Control `0xff` introduces an extended repeat: an unsigned LEB128 run length of at least 128, followed by the repeated byte.
 - The encoder uses extended repeats for runs of 128 or more, avoiding repeated 128-byte tokens on long constant residual sequences.
 - The decoder rejects non-canonical/overflowing LEB128 lengths, extended lengths below 128, truncated tokens, output overflow, and a final decoded residual length that differs from original_length - min(original_length, 2).
@@ -69,3 +69,16 @@ Versions 1, 2, and 3 are experimental and may change before a stable format is d
 ## 8. Security
 
 The format is public and unkeyed. Do not use it to hide data, authenticate senders, or verify adversarially modified content.
+
+## 9. Shared experimental conformance vectors
+
+The repository includes language-neutral frame vectors in `test-vectors/narf-frames.tsv`. Each row contains a frame as lowercase hexadecimal, its expected decoded bytes, and a role:
+
+- `writer`: the current Rust encoder must emit this exact frame for the listed decoded bytes.
+- `decoder`: the frame is a valid decoder input, but the current encoder is not required to select that representation.
+
+The vectors cover empty and short inputs, the short-repeat boundary at 127 bytes, extended-repeat boundaries at 128, 129, and 256 bytes, a 128-byte literal, raw mode, and legacy version-1/version-2 decoding.
+
+`tools/narf-conformance/reference_decoder.py` is a small Python standard-library decoder that independently implements header parsing, token decoding, canonical unsigned-LEB128 checks, and the modulo-256 recurrence. Both the Rust integration test and the Python reference tests consume the same fixed vectors. The Python implementation is an in-repository second-language cross-check, not an external independent implementation or a frozen interoperability guarantee.
+
+The current main-branch decoder does not enforce the stricter version-3 token-segmentation canonicality proposed separately in PR #4. These vectors do not claim to test that proposed rule. They test the currently documented token grammar and selected encoder outputs.
