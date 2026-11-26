@@ -77,7 +77,7 @@ The repository includes language-neutral frame vectors in `test-vectors/narf-fra
 - `writer`: the current Rust encoder must emit this exact frame for the listed decoded bytes.
 - `decoder`: the frame is a valid decoder input, but the current encoder is not required to select that representation.
 
-The vectors cover empty and short inputs, the short-repeat boundary at 127 bytes, extended-repeat boundaries at 128, 129, and 256 bytes, a 128-byte literal, raw mode, and legacy version-1/version-2 decoding.
+The vectors cover empty and short inputs, the short-repeat boundary at 127 bytes, extended-repeat boundaries at 128, 129, and 256 bytes, a 128-byte literal, a nonzero coefficient recurrence, raw mode, and legacy version-1/version-2 decoding.
 
 `tools/narf-conformance/reference_decoder.py` is a small Python standard-library decoder that independently implements header parsing, token decoding, canonical unsigned-LEB128 checks, and the modulo-256 recurrence. Both the Rust integration test and the Python reference tests consume the same fixed vectors. The Python implementation is an in-repository second-language cross-check, not an external independent implementation or a frozen interoperability guarantee.
 
