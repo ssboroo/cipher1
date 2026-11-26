@@ -23,6 +23,13 @@ def load_vectors():
     return vectors
 
 
+def vector_frame(identifier: str) -> bytes:
+    for name, frame, _expected, _writer in load_vectors():
+        if name == identifier:
+            return frame
+    raise AssertionError(f"missing conformance vector: {identifier}")
+
+
 def frame_v3(output_len: int, body: bytes, seed0: int = 0x41, seed1: int = 0x41) -> bytes:
     return (
         b"NXAR"
@@ -36,7 +43,7 @@ def frame_v3(output_len: int, body: bytes, seed0: int = 0x41, seed1: int = 0x41)
 class ReferenceDecoderTests(unittest.TestCase):
     def test_all_shared_vectors_decode(self):
         vectors = load_vectors()
-        self.assertGreaterEqual(len(vectors), 12)
+        self.assertEqual(len(vectors), 14)
         for identifier, frame, expected, _writer in vectors:
             with self.subTest(vector=identifier):
                 self.assertEqual(decode(frame), expected)
@@ -44,12 +51,12 @@ class ReferenceDecoderTests(unittest.TestCase):
     def test_rejects_truncated_header_and_invalid_magic(self):
         with self.assertRaises(DecodeError):
             decode(b"NXAR")
-        valid = load_vectors()[1][1]
+        valid = vector_frame("v3-one-byte")
         with self.assertRaises(DecodeError):
             decode(b"NOPE" + valid[4:])
 
     def test_rejects_unsupported_version_and_invalid_coefficients(self):
-        valid = load_vectors()[1][1]
+        valid = vector_frame("v3-one-byte")
         with self.assertRaises(DecodeError):
             decode(valid[:4] + b"\x04" + valid[5:])
         invalid_coefficients = valid[:5] + b"\x04\x00" + valid[7:]
@@ -57,12 +64,12 @@ class ReferenceDecoderTests(unittest.TestCase):
             decode(invalid_coefficients)
 
     def test_rejects_output_limit_before_decoding(self):
-        valid = load_vectors()[5][1]
+        valid = vector_frame("v3-extended-repeat-128")
         with self.assertRaises(DecodeError):
             decode(valid, max_output_len=16)
 
     def test_rejects_raw_mode_with_nonzero_seeds_or_wrong_body_length(self):
-        valid_raw = load_vectors()[9][1]
+        valid_raw = vector_frame("v3-raw")
         bad_seed = valid_raw[:15] + b"\x01" + valid_raw[16:]
         with self.assertRaises(DecodeError):
             decode(bad_seed)
