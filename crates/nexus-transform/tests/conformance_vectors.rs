@@ -1,6 +1,7 @@
 use nexus_transform::{decode_with_limits, encode, DecodeLimits};
 
 const VECTORS: &str = include_str!("../../../test-vectors/narf-frames.tsv");
+const INVALID_VECTORS: &str = include_str!("../../../test-vectors/narf-invalid-frames.tsv");
 
 fn decode_hex(value: &str) -> Vec<u8> {
     assert_eq!(value.len() % 2, 0, "hex value has an odd length");
@@ -20,12 +21,12 @@ fn rust_decoder_matches_shared_narf_frame_vectors() {
     let mut lines = VECTORS.lines();
     assert_eq!(
         lines.next(),
-        Some("id\tframe_hex\tdecoded_hex\trust_writer")
+        Some("id\\tframe_hex\\tdecoded_hex\\trust_writer")
     );
 
     let mut vector_count = 0usize;
     for line in lines.filter(|line| !line.is_empty()) {
-        let fields: Vec<_> = line.split('\t').collect();
+        let fields: Vec<_> = line.split('\\t').collect();
         assert_eq!(fields.len(), 4, "malformed vector row: {line}");
 
         let frame = decode_hex(fields[1]);
@@ -55,4 +56,34 @@ fn rust_decoder_matches_shared_narf_frame_vectors() {
     }
 
     assert_eq!(vector_count, 14, "unexpected conformance vector count");
+}
+
+#[test]
+fn rust_decoder_rejects_shared_malformed_frame_vectors() {
+    let mut lines = INVALID_VECTORS.lines();
+    assert_eq!(
+        lines.next(),
+        Some("id\\tframe_hex\\tmax_output_len")
+    );
+
+    let mut vector_count = 0usize;
+    for line in lines.filter(|line| !line.is_empty()) {
+        let fields: Vec<_> = line.split('\\t').collect();
+        assert_eq!(fields.len(), 3, "malformed invalid-vector row: {line}");
+
+        let frame = decode_hex(fields[1]);
+        let max_output_len = fields[2]
+            .parse::<usize>()
+            .expect("max_output_len must fit usize");
+        let result = decode_with_limits(&frame, DecodeLimits { max_output_len });
+
+        assert!(
+            result.is_err(),
+            "decoder unexpectedly accepted malformed vector {}",
+            fields[0]
+        );
+        vector_count += 1;
+    }
+
+    assert_eq!(vector_count, 22, "unexpected malformed vector count");
 }
