@@ -36,6 +36,9 @@ jobs:
       - name: Test corpus manifest generator
         run: python -m unittest discover -s tools/narf-corpus-bench/scripts -p 'test_*.py' -v
 
+      - name: Test independent NARF reference decoder
+        run: python -m unittest discover -s tools/narf-conformance -p 'test_*.py' -v
+
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
         with:

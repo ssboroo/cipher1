@@ -11,6 +11,7 @@
 - Verify version-3 extended runs, canonical ULEB128 parsing, overflow rejection, and version-1/version-2 compatibility.
 - Verify version-1 decode compatibility and reject non-canonical raw-mode markers, seeds, and payload lengths.
 - Verify the exact token-size estimator equals the emitted token-stream length for all 64 coefficient pairs and extended-run boundary lengths.
+- Cross-check fixed NARF frame vectors with the Rust implementation and an in-repository Python standard-library reference decoder. This is a second-language consistency check, not an external independent implementation.
 - Run Miri where supported and sanitizing/fuzzing tools on native targets.
 - Require deterministic output across x86_64, AArch64, and WebAssembly.
 
@@ -55,7 +56,7 @@ Targets:
 - iOS ARM64
 - WebAssembly/WASI
 
-Require byte-for-byte conformance vectors on every target.
+Require byte-for-byte conformance vectors on every target. Run the Rust vector integration test and Python reference decoder in the supported CI matrix. These in-repository checks do not replace an independently maintained third-party implementation.
 
 ## Phase 5 — Security research
 

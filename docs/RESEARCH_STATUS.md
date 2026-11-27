@@ -1,6 +1,6 @@
 # CIPHER-1 NEXUS Research Status
 
-Last updated: 2026-11-16
+Last updated: 2026-11-26
 
 ## Executive status
 
@@ -49,16 +49,16 @@ cryptographic algorithm.
 - Declared runtime library MSRV: Rust 1.85.
 - Linux CI additionally runs Clippy with `-D warnings`, dependency supply-chain
   checks, cross-target compilation for WebAssembly, Android ARM64, iOS ARM64,
-  and Windows ARM64, plus the benchmark harness.
+  and Windows ARM64, plus the synthetic benchmark harness.
 - Decoder fuzz workflow exercises NARF and C1AE decoders with bounded outputs.
-- The benchmark compares identity, framed pair-RLE, NARF v3, LZ4, Zstandard,
-  and Brotli on five deterministic synthetic 16 KiB workloads. It reports full
-  encoded sizes and 30 individually timed encode/decode samples after five
-  warm-ups, with nearest-rank p50/p95/p99.
-- Benchmark metadata records Rust/Cargo versions and Linux runner, kernel, and
-  CPU information when available.
-- See [BENCHMARK_METHODOLOGY.md](BENCHMARK_METHODOLOGY.md) for framing rules,
-  reproducibility details, and limitations.
+- The public-corpus runner compares identity, framed pair-RLE, NARF v3, LZ4,
+  Zstandard, and Brotli with complete encoded sizes, checksum-verified manifests,
+  and raw timing samples. It has not yet produced results from a public corpus.
+- The current baseline CI harness uses five deterministic synthetic 16 KiB
+  workloads and 30 measured encode/decode samples after five warm-ups.
+- See [BENCHMARK_METHODOLOGY.md](BENCHMARK_METHODOLOGY.md) and
+  [PUBLIC_CORPUS_BENCHMARK_RUNNER.md](PUBLIC_CORPUS_BENCHMARK_RUNNER.md) for
+  framing rules, reproducibility details, and limitations.
 
 ## Recent merged work
 
@@ -70,14 +70,28 @@ cryptographic algorithm.
   It adds complete-frame benchmark accounting, framed pair-RLE, per-operation
   timing samples, percentile reporting, and runner metadata. Its Rust CI and
   decoder fuzz workflows passed.
+- PR #7 merged as commit `3e30e2cc6caa5a5ca80d23d7d04e9350624e2b69`.
+  It adds the checksum-verified public-corpus benchmark runner and deterministic
+  SHA-256 manifest generator. The tools have CI tests, but no public-corpus
+  measurement has been published.
 
 ## Current review findings
 
-- NARF v3 encoding is deterministic, but the decoder accepts more than one
-  valid token segmentation for some residual sequences. Canonical
-  unsigned-LEB128 lengths are enforced; whole-stream token canonicality is
-  not currently a decoder requirement. Any strict-canonical mode requires an
-  explicit compatibility decision and conformance tests.
+- NARF v3 encoding is deterministic, but the main-branch decoder accepts more
+  than one valid token segmentation for some residual sequences. Canonical
+  unsigned-LEB128 lengths are enforced; whole-stream token canonicality is not
+  currently a decoder requirement.
+- PR #4 proposes strict v3 token-segmentation validation and in-place
+  reconstruction. Its CI and fuzz workflows passed on the reviewed branch head,
+  but it tightens acceptance compared with earlier experimental v3 decoders.
+  Do not merge it until the compatibility policy and test vectors are agreed.
+- An in-repository Python reference decoder and shared v1/v2/v3 frame vectors
+  are being added in the current conformance work. This is a second-language
+  consistency check, not an external independent implementation.
+- PR #8 adds structured NARF v3 frame mutations to the fuzz target. Its reviewed
+  head passed cross-platform Rust CI and the bounded decoder fuzz workflow.
+  Coverage increase is not claimed because coverage instrumentation was not
+  collected.
 - Fallible reservation does not guarantee process liveness under OS memory
   overcommit or physical-memory exhaustion.
 - The benchmark-only pair-RLE decoder is for trusted harness data, not an
@@ -88,20 +102,22 @@ cryptographic algorithm.
 - Published benchmark measurements from representative public corpora and
   multiple independent runs.
 - Memory, streaming, energy, and cross-platform runtime measurements.
-- Independent implementation and wire-format conformance vectors.
+- An independently maintained implementation and wire-format conformance
+  evidence; the in-repository Python reference is not sufficient.
 - External cryptographic review of C1AE integration and key-management design.
 - Replay-protection protocol and sender-identity model for network use.
 - Prior-art and patent review before any novelty claim.
 - Independent cryptanalysis before any custom cryptographic primitive could
   be considered.
+- License, governance, and vulnerability-disclosure policies.
 
 ## Next engineering priorities
 
-1. Establish NARF token canonicality with explicit accepted/rejected vectors and
-   a backward-compatibility decision.
-2. Expand the benchmark to versioned public corpora with recorded licenses,
-   checksums, and preprocessing; repeat measurements on comparable hardware.
-3. Add stable cross-language conformance vectors for C1NX, C1AE, and NARF.
+1. Complete review and CI for the shared NARF frame vectors and Python reference
+   decoder; keep their status distinct from external conformance evidence.
+2. Decide the compatibility policy for PR #4's stricter v3 token segmentation.
+3. Select versioned public corpora with documented license/provenance, generate
+   SHA-256 manifests, and publish reproducible benchmark results.
 4. Measure peak memory, streaming behavior, and platform runtime behavior.
 5. Keep C1AE based on reviewed primitives; focus research on protocol,
    interoperability, key lifecycle, and safe composition.
