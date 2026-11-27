@@ -82,3 +82,12 @@ The vectors cover empty and short inputs, the short-repeat boundary at 127 bytes
 `tools/narf-conformance/reference_decoder.py` is a small Python standard-library decoder that independently implements header parsing, token decoding, canonical unsigned-LEB128 checks, and the modulo-256 recurrence. Both the Rust integration test and the Python reference tests consume the same fixed vectors. The Python implementation is an in-repository second-language cross-check, not an external independent implementation or a frozen interoperability guarantee.
 
 The current main-branch decoder does not enforce the stricter version-3 token-segmentation canonicality proposed separately in PR #4. These vectors do not claim to test that proposed rule. They test the currently documented token grammar and selected encoder outputs.
+
+
+## 10. Shared malformed-input vectors
+
+The repository also includes `test-vectors/narf-invalid-frames.tsv`. Each row contains an identifier, a malformed frame encoded as lowercase hexadecimal, and the caller-supplied maximum output length. Both the Rust integration test and the Python reference-decoder tests must reject every row.
+
+The current cases cover truncated headers, invalid magic and versions, unsupported coefficients, partial raw-mode parameters, output limits, invalid raw-mode seeds and lengths, unused seed bytes, truncated and oversized tokens, invalid short-repeat and extended-repeat boundaries, non-canonical, truncated, and overflowing unsigned LEB128 values, residual underruns, and tokens following the declared output.
+
+These shared rejection vectors check agreement on selected malformed cases. They are not exhaustive parser verification, do not replace fuzzing, and do not establish a stable wire-format contract.
