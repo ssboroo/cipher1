@@ -13,13 +13,13 @@ INVALID_VECTOR_PATH = ROOT / "test-vectors" / "narf-invalid-frames.tsv"
 
 def load_vectors():
     lines = VECTOR_PATH.read_text(encoding="utf-8").splitlines()
-    if not lines or lines[0] != "id\\tframe_hex\\tdecoded_hex\\trust_writer":
+    if not lines or lines[0] != "id\tframe_hex\tdecoded_hex\trust_writer":
         raise AssertionError("unexpected conformance vector header")
     vectors = []
     for line in lines[1:]:
         if not line:
             continue
-        identifier, frame_hex, decoded_hex, writer = line.split("\\t")
+        identifier, frame_hex, decoded_hex, writer = line.split("\t")
         vectors.append(
             (identifier, bytes.fromhex(frame_hex), bytes.fromhex(decoded_hex), writer)
         )
@@ -28,13 +28,13 @@ def load_vectors():
 
 def load_invalid_vectors():
     lines = INVALID_VECTOR_PATH.read_text(encoding="utf-8").splitlines()
-    if not lines or lines[0] != "id\\tframe_hex\\tmax_output_len":
+    if not lines or lines[0] != "id\tframe_hex\tmax_output_len":
         raise AssertionError("unexpected malformed-vector header")
     vectors = []
     for line in lines[1:]:
         if not line:
             continue
-        identifier, frame_hex, max_output_len = line.split("\\t")
+        identifier, frame_hex, max_output_len = line.split("\t")
         vectors.append((identifier, bytes.fromhex(frame_hex), int(max_output_len)))
     return vectors
 
@@ -82,8 +82,8 @@ class ReferenceDecoderTests(unittest.TestCase):
     def test_rejects_unsupported_version_and_invalid_coefficients(self):
         valid = vector_frame("v3-one-byte")
         with self.assertRaises(DecodeError):
-            decode(valid[:4] + b"\\x04" + valid[5:])
-        invalid_coefficients = valid[:5] + b"\\x04\\x00" + valid[7:]
+            decode(valid[:4] + b"\x04" + valid[5:])
+        invalid_coefficients = valid[:5] + b"\x04\x00" + valid[7:]
         with self.assertRaises(DecodeError):
             decode(invalid_coefficients)
 
@@ -94,7 +94,7 @@ class ReferenceDecoderTests(unittest.TestCase):
 
     def test_rejects_raw_mode_with_nonzero_seeds_or_wrong_body_length(self):
         valid_raw = vector_frame("v3-raw")
-        bad_seed = valid_raw[:15] + b"\\x01" + valid_raw[16:]
+        bad_seed = valid_raw[:15] + b"\x01" + valid_raw[16:]
         with self.assertRaises(DecodeError):
             decode(bad_seed)
         with self.assertRaises(DecodeError):
@@ -105,39 +105,39 @@ class ReferenceDecoderTests(unittest.TestCase):
             b"NXAR"
             + bytes((1, 0xFF, 0xFF))
             + (1).to_bytes(8, "big")
-            + b"\\x00\\x00A"
+            + b"\x00\x00A"
         )
         with self.assertRaises(DecodeError):
             decode(raw_v1)
 
     def test_rejects_short_v3_repeat_of_two(self):
         with self.assertRaises(DecodeError):
-            decode(frame_v3(4, b"\\x81A"))
+            decode(frame_v3(4, b"\x81A"))
 
     def test_rejects_extended_repeat_below_128(self):
         with self.assertRaises(DecodeError):
-            decode(frame_v3(129, b"\\xFF\\x7FA"))
+            decode(frame_v3(129, b"\xFF\x7FA"))
 
     def test_rejects_noncanonical_and_truncated_uleb128(self):
         with self.assertRaises(DecodeError):
-            decode(frame_v3(130, b"\\xFF\\x80\\x81\\x00A"))
+            decode(frame_v3(130, b"\xFF\x80\x81\x00A"))
         with self.assertRaises(DecodeError):
-            decode(frame_v3(130, b"\\xFF\\x80"))
+            decode(frame_v3(130, b"\xFF\x80"))
 
     def test_rejects_truncated_literal_and_output_overrun(self):
         with self.assertRaises(DecodeError):
-            decode(frame_v3(5, b"\\x02AB"))
+            decode(frame_v3(5, b"\x02AB"))
         with self.assertRaises(DecodeError):
-            decode(frame_v3(4, b"\\x82A\\x00B"))
+            decode(frame_v3(4, b"\x82A\x00B"))
 
     def test_rejects_nonzero_unused_seed_and_trailing_output_mismatch(self):
-        empty = b"NXAR" + bytes((3, 0, 0)) + (0).to_bytes(8, "big") + b"\\x01\\x00"
+        empty = b"NXAR" + bytes((3, 0, 0)) + (0).to_bytes(8, "big") + b"\x01\x00"
         with self.assertRaises(DecodeError):
             decode(empty)
         with self.assertRaises(DecodeError):
-            decode(frame_v3(6, b"\\x82A"))
+            decode(frame_v3(6, b"\x82A"))
         with self.assertRaises(DecodeError):
-            decode(frame_v3(5, b"\\x82A\\x00B"))
+            decode(frame_v3(5, b"\x82A\x00B"))
 
 
 if __name__ == "__main__":
