@@ -21,12 +21,12 @@ fn rust_decoder_matches_shared_narf_frame_vectors() {
     let mut lines = VECTORS.lines();
     assert_eq!(
         lines.next(),
-        Some("id\\tframe_hex\\tdecoded_hex\\trust_writer")
+        Some("id\tframe_hex\tdecoded_hex\trust_writer")
     );
 
     let mut vector_count = 0usize;
     for line in lines.filter(|line| !line.is_empty()) {
-        let fields: Vec<_> = line.split('\\t').collect();
+        let fields: Vec<_> = line.split('\t').collect();
         assert_eq!(fields.len(), 4, "malformed vector row: {line}");
 
         let frame = decode_hex(fields[1]);
@@ -63,12 +63,12 @@ fn rust_decoder_rejects_shared_malformed_frame_vectors() {
     let mut lines = INVALID_VECTORS.lines();
     assert_eq!(
         lines.next(),
-        Some("id\\tframe_hex\\tmax_output_len")
+        Some("id\tframe_hex\tmax_output_len")
     );
 
     let mut vector_count = 0usize;
     for line in lines.filter(|line| !line.is_empty()) {
-        let fields: Vec<_> = line.split('\\t').collect();
+        let fields: Vec<_> = line.split('\t').collect();
         assert_eq!(fields.len(), 3, "malformed invalid-vector row: {line}");
 
         let frame = decode_hex(fields[1]);
