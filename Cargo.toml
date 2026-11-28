@@ -5,4 +5,4 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 rust-version = "1.85"
-license = "UNLICENSED"
+license = "MIT OR Apache-2.0"

@@ -42,6 +42,10 @@ See [benchmark methodology](docs/BENCHMARK_METHODOLOGY.md), [validation plan](do
 - [Validation plan](docs/NEXUS_VALIDATION_PLAN.md)
 - [Current research status and release gates](docs/RESEARCH_STATUS.md)
 
+## License
+
+CIPHER-1 is dual-licensed under **MIT OR Apache-2.0**, at your option. See [LICENSE](LICENSE), [LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE), and [licensing notes](docs/LICENSING.md). Third-party dependencies and datasets retain their own licenses.
+
 ## Security notice
 
 NARF is reversible preprocessing, not encryption. The legacy C1NX digest is unkeyed and does not authenticate a sender. The optional C1AE module uses XChaCha20-Poly1305, but this repository's integration has not been independently audited and does not provide key management, sender identity, or replay protection. Do not treat this research repository as a production security product.
